@@ -34,6 +34,8 @@ pub enum Undo {
     Hostname { static_name: String, pretty: String },
     /// Revertir = `systemctl disable --now` (lo habilitamos nosotros).
     UnitDisableNow { unit: String },
+    /// Paquetes que instalamos nosotros; revertir = desinstalar con el mismo gestor.
+    PackagesInstalled { pm: String, names: Vec<String> },
     FirewallIface { iface: String, previous_zone: String },
     /// kind: "service" | "port"
     FirewallAllow { zone: String, kind: String, value: String },
@@ -233,6 +235,9 @@ impl<'a> Applier<'a> {
     pub fn apply(&self, key: &str, fix: &Fix, undo: &mut Vec<Undo>) -> Result<Vec<String>, String> {
         match fix {
             Fix::DisableUnits { units } => self.disable_units(units, undo),
+            Fix::EnableUnits { units } => self.enable_units(units, undo),
+            Fix::InstallPackages { names } => self.install_packages(names, undo),
+            Fix::UsbguardPolicy {} => self.usbguard_policy(undo),
             Fix::Sysctl { settings } => self.sysctl(key, settings, undo),
             Fix::WriteFiles { files, after } => {
                 // `After` va primero: al revertir (orden inverso) se ejecuta tras restaurar los archivos.
@@ -350,6 +355,88 @@ impl<'a> Applier<'a> {
         } else {
             Some((file, active == "active" || active == "activating"))
         }
+    }
+
+    /// (gestor, comando de instalación, comando de desinstalación)
+    fn pm_commands(&self) -> Option<(&'static str, Vec<&'static str>, Vec<&'static str>)> {
+        if self.runner.exists("dnf") {
+            Some(("dnf", vec!["install", "-y"], vec!["remove", "-y"]))
+        } else if self.runner.exists("apt-get") {
+            Some(("apt-get", vec!["install", "-y"], vec!["remove", "-y"]))
+        } else if self.runner.exists("pacman") {
+            Some(("pacman", vec!["-S", "--noconfirm"], vec!["-R", "--noconfirm"]))
+        } else if self.runner.exists("zypper") {
+            Some(("zypper", vec!["--non-interactive", "install"], vec!["--non-interactive", "remove"]))
+        } else {
+            None
+        }
+    }
+
+    fn install_packages(&self, names: &[String], undo: &mut Vec<Undo>) -> Result<Vec<String>, String> {
+        const ALLOWED: [&str; 1] = ["usbguard"];
+        if names.is_empty() || !names.iter().all(|n| ALLOWED.contains(&n.as_str())) {
+            return Err("Paquete no permitido.".into());
+        }
+        let (pm, install, _) = self.pm_commands().ok_or("No se encontró un gestor de paquetes compatible (dnf, apt, pacman o zypper).")?;
+        let missing: Vec<&String> = names.iter().filter(|n| !self.runner.exists(n)).collect();
+        if missing.is_empty() {
+            return Ok(vec!["Ya estaba instalado.".into()]);
+        }
+        let mut args: Vec<&str> = install.clone();
+        args.extend(missing.iter().map(|s| s.as_str()));
+        self.sh(pm, &args)?;
+        undo.push(Undo::PackagesInstalled { pm: pm.to_string(), names: missing.iter().map(|s| s.to_string()).collect() });
+        Ok(vec![format!("Instalado: {}", missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))])
+    }
+
+    fn usbguard_policy(&self, undo: &mut Vec<Undo>) -> Result<Vec<String>, String> {
+        let path = "/etc/usbguard/rules.conf";
+        let current = std::fs::read_to_string(self.p(path)).unwrap_or_default();
+        if current.lines().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+            return Ok(vec!["USBGuard ya tiene reglas guardadas; se conservan.".into()]);
+        }
+        let o = self.sh("usbguard", &["generate-policy"])?;
+        if !o.stdout.lines().any(|l| l.trim_start().starts_with("allow")) {
+            return Err("No se pudo generar la política: USBGuard no vio ningún dispositivo.".into());
+        }
+        self.write_file(path, &o.stdout, undo)?;
+        // La carpeta debe quedar solo para root, como pide USBGuard.
+        if let Some(d) = self.p(path).parent() {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(self.p(path), std::fs::Permissions::from_mode(0o600));
+            let _ = d;
+        }
+        Ok(vec!["Política creada: se permiten los dispositivos conectados ahora.".into()])
+    }
+
+    fn enable_units(&self, units: &[String], undo: &mut Vec<Undo>) -> Result<Vec<String>, String> {
+        let re = Regex::new(r"^[A-Za-z0-9:_.@\-]+$").unwrap();
+        let mut msgs = Vec::new();
+        for u in units {
+            if !re.is_match(u) {
+                return Err(format!("Nombre de unidad no permitido: {u}"));
+            }
+            // USBGuard sin reglas guardadas bloquea todos los USB nuevos, teclado incluido.
+            if u == "usbguard.service" {
+                let rules = std::fs::read_to_string(self.p("/etc/usbguard/rules.conf")).unwrap_or_default();
+                if !rules.lines().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+                    return Err("USBGuard no tiene reglas guardadas: al encenderlo bloquearía todos tus USB, incluido el teclado. Genera primero la política: sudo sh -c 'usbguard generate-policy > /etc/usbguard/rules.conf'".into());
+                }
+            }
+            if self.unit_state(u).is_none() {
+                return Err(format!("{u} no está instalado."));
+            }
+            if self.unit_active(u) && self.unit_state(u).map(|(f, _)| f.starts_with("enabled")).unwrap_or(false) {
+                continue;
+            }
+            self.sh("systemctl", &["enable", "--now", u])?;
+            undo.push(Undo::UnitDisableNow { unit: u.clone() });
+            msgs.push(format!("{u}: habilitado y en marcha"));
+        }
+        if msgs.is_empty() {
+            msgs.push("Nada que cambiar: ya estaba encendido.".into());
+        }
+        Ok(msgs)
     }
 
     fn disable_units(&self, units: &[String], undo: &mut Vec<Undo>) -> Result<Vec<String>, String> {
@@ -653,6 +740,16 @@ impl<'a> Applier<'a> {
                         },
                     };
                     note(r.map_err(|e| format!("No se pudo restaurar los permisos de {app}: {e}")));
+                }
+                Undo::PackagesInstalled { pm, names } => {
+                    let cmd = match pm.as_str() {
+                        "dnf" | "apt-get" => vec!["remove", "-y"],
+                        "pacman" => vec!["-R", "--noconfirm"],
+                        _ => vec!["--non-interactive", "remove"],
+                    };
+                    let mut args = cmd;
+                    args.extend(names.iter().map(String::as_str));
+                    note(self.sh(pm, &args).map(|_| ()));
                 }
                 Undo::UnitDisableNow { unit } => note(self.sh("systemctl", &["disable", "--now", unit]).map(|_| ())),
                 Undo::FirewallIface { iface, previous_zone } => {
@@ -1002,6 +1099,85 @@ mod tests {
             assert!(a.apply("k", &fix, &mut vec![]).is_err(), "{app} {arg}");
         }
         assert!(!r.calls().iter().any(|c| c.starts_with("flatpak override")));
+    }
+
+    #[test]
+    fn enable_usbguard_requires_saved_rules_and_reverts() {
+        let r = MockRunner::new();
+        r.on("systemctl is-active usbguard.service", "inactive\n");
+        r.on("systemctl show --no-pager -p LoadState -p UnitFileState -p ActiveState usbguard.service", "LoadState=loaded\nUnitFileState=disabled\nActiveState=inactive\n");
+        let root = tmp("usbguard");
+        let a = applier(&r, &root);
+        let fix = Fix::EnableUnits { units: vec!["usbguard.service".into()] };
+        let e = a.apply("tool.usbguard", &fix, &mut vec![]).unwrap_err();
+        assert!(e.contains("sin") || e.contains("no tiene reglas"), "{e}");
+        assert!(!r.calls().iter().any(|c| c.contains("enable")), "no debe encenderlo sin reglas");
+        std::fs::create_dir_all(root.join("etc/usbguard")).unwrap();
+        std::fs::write(root.join("etc/usbguard/rules.conf"), "# solo comentario\n").unwrap();
+        assert!(a.apply("tool.usbguard", &fix, &mut vec![]).is_err(), "solo comentarios no cuenta");
+        std::fs::write(root.join("etc/usbguard/rules.conf"), "allow id 1d6b:0002\n").unwrap();
+        let mut undo = vec![];
+        a.apply("tool.usbguard", &fix, &mut undo).unwrap();
+        assert!(r.calls().contains(&"systemctl enable --now usbguard.service".to_string()));
+        assert!(a.revert(&undo).is_empty());
+        assert!(r.calls().contains(&"systemctl disable --now usbguard.service".to_string()));
+        assert!(a.apply("k", &Fix::EnableUnits { units: vec!["x; rm".into()] }, &mut vec![]).is_err());
+    }
+
+    #[test]
+    fn usbguard_setup_installs_creates_policy_and_reverts_everything() {
+        let r = MockRunner::new();
+        r.on("dnf --version", "4\n");
+        r.on("usbguard generate-policy", "allow id 1d6b:0002 name \"xHCI Host Controller\"\n");
+        r.on("systemctl is-active usbguard.service", "inactive\n");
+        r.on("systemctl show --no-pager -p LoadState -p UnitFileState -p ActiveState usbguard.service", "LoadState=loaded\nUnitFileState=disabled\nActiveState=inactive\n");
+        let root = tmp("usbguard-setup");
+        std::fs::create_dir_all(root.join("etc/usbguard")).unwrap();
+        std::fs::write(root.join("etc/usbguard/rules.conf"), "").unwrap();
+        let a = applier(&r, &root);
+        let fixes = [Fix::InstallPackages { names: vec!["usbguard".into()] }, Fix::UsbguardPolicy {}, Fix::EnableUnits { units: vec!["usbguard.service".into()] }];
+        let refs: Vec<&Fix> = fixes.iter().collect();
+        let (undo, _) = a.apply_all("tool.usbguard", &refs).unwrap();
+        assert!(!r.calls().iter().any(|c| c.starts_with("dnf")), "ya estaba instalado: no se vuelve a instalar");
+        assert!(std::fs::read_to_string(root.join("etc/usbguard/rules.conf")).unwrap().contains("allow id 1d6b:0002"));
+        assert!(r.calls().contains(&"systemctl enable --now usbguard.service".to_string()));
+        assert!(a.revert(&undo).is_empty());
+        assert!(r.calls().contains(&"systemctl disable --now usbguard.service".to_string()));
+        assert!(!r.calls().iter().any(|c| c.starts_with("dnf remove")), "no se desinstala lo que ya estaba");
+        assert_eq!(std::fs::read_to_string(root.join("etc/usbguard/rules.conf")).unwrap(), "", "se restaura el archivo");
+        // Paquetes fuera de la lista cerrada se rechazan.
+        assert!(a.apply("k", &Fix::InstallPackages { names: vec!["rm".into()] }, &mut vec![]).is_err());
+    }
+
+    #[test]
+    fn install_packages_runs_pm_and_reverts_with_removal() {
+        let r = MockRunner::new();
+        r.on("dnf --version", "4\n");
+        let a = applier(&r, &tmp("pkg"));
+        let mut undo = vec![];
+        a.apply("tool.usbguard", &Fix::InstallPackages { names: vec!["usbguard".into()] }, &mut undo).unwrap();
+        assert!(r.calls().contains(&"dnf install -y usbguard".to_string()), "{:?}", r.calls());
+        assert!(a.revert(&undo).is_empty());
+        assert!(r.calls().contains(&"dnf remove -y usbguard".to_string()));
+        // Sin gestor de paquetes conocido, error claro.
+        let none = MockRunner::new();
+        let b = applier(&none, &tmp("pkg2"));
+        assert!(b.apply("k", &Fix::InstallPackages { names: vec!["usbguard".into()] }, &mut vec![]).unwrap_err().contains("gestor de paquetes"));
+    }
+
+    #[test]
+    fn usbguard_policy_keeps_existing_rules_and_refuses_empty_output() {
+        let r = MockRunner::new();
+        r.on("usbguard generate-policy", "# nada\n");
+        let root = tmp("usbguard-keep");
+        std::fs::create_dir_all(root.join("etc/usbguard")).unwrap();
+        let a = applier(&r, &root);
+        assert!(a.apply("k", &Fix::UsbguardPolicy {}, &mut vec![]).is_err(), "sin dispositivos no se escribe nada");
+        assert!(!root.join("etc/usbguard/rules.conf").exists());
+        std::fs::write(root.join("etc/usbguard/rules.conf"), "allow id aaaa:bbbb\n").unwrap();
+        let before = r.calls().len();
+        a.apply("k", &Fix::UsbguardPolicy {}, &mut vec![]).unwrap();
+        assert_eq!(r.calls().len(), before, "con reglas existentes ni siquiera se invoca usbguard");
     }
 
     #[test]

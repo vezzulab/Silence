@@ -226,6 +226,13 @@ pub struct UnitCmd {
 pub enum Fix {
     /// Detiene y deshabilita (o enmascara si la unidad es estática). Reversible.
     DisableUnits { units: Vec<String> },
+    /// Habilita y arranca servicios. Reversible (revertir los deshabilita). Solo desde herramientas internas.
+    EnableUnits { units: Vec<String> },
+    /// Instala paquetes (solo una lista cerrada) con el gestor de paquetes de la distribución.
+    /// Reversible: revertir los desinstala. Solo desde herramientas internas.
+    InstallPackages { names: Vec<String> },
+    /// Crea la política de USBGuard con los dispositivos conectados ahora, si aún no hay reglas.
+    UsbguardPolicy {},
     Sysctl { settings: Vec<SysctlSetting> },
     /// Crea archivos (drop-ins) bajo /etc. Reversible.
     WriteFiles {
@@ -270,6 +277,9 @@ impl Fix {
         matches!(
             self,
             Fix::DisableUnits { .. }
+                | Fix::EnableUnits { .. }
+                | Fix::InstallPackages { .. }
+                | Fix::UsbguardPolicy {}
                 | Fix::Sysctl { .. }
                 | Fix::WriteFiles { .. }
                 | Fix::NmProfiles { .. }
@@ -282,6 +292,9 @@ impl Fix {
     /// Comandos/acciones tal como se mostrarán al usuario antes de aplicar.
     pub fn preview(&self) -> Vec<String> {
         match self {
+            Fix::InstallPackages { names } => vec![format!("Instalar con el gestor de paquetes de tu distribución: {}", names.join(" "))],
+            Fix::UsbguardPolicy {} => vec!["usbguard generate-policy > /etc/usbguard/rules.conf  (permite lo que tienes conectado ahora)".to_string()],
+            Fix::EnableUnits { units } => vec![format!("systemctl enable --now {}", units.join(" "))],
             Fix::DisableUnits { units } => {
                 vec![format!("systemctl disable --now {}", units.join(" "))]
             }

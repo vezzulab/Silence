@@ -52,7 +52,7 @@ La pestaña *Protecciones* está organizada en seis secciones.
 
 **Aplicaciones**: recorta los permisos amplios de tus apps Flatpak (carpeta personal, dispositivos) y instala Tor Browser desde Flathub.
 
-**Dispositivos**: bloqueo de la cámara web, silencio del micrófono con un clic y guía para USBGuard.
+**Dispositivos**: bloqueo de la cámara web, silencio del micrófono con un clic y USBGuard (lo instala, genera la política con lo que tienes conectado y lo enciende o apaga).
 
 **Sistema**: endurecimiento del kernel (sysctl) y revisión de tus llaves SSH (permisos y llaves sin contraseña).
 

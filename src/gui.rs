@@ -1956,19 +1956,30 @@ impl App {
             }
         }, self);
 
-        let usbguard = s.packages.contains("usbguard");
-        tool_header(ui, "Puertos USB", usbguard, |ui, _this| {
+        let installed = s.packages.contains("usbguard");
+        let running = s.units.get("usbguard.service").map(|u| u.is_active()).unwrap_or(false);
+        tool_header(ui, "Puertos USB (USBGuard)", installed && running, |ui, _this| {
             ui.label(dim("Un USB desconocido puede hacerse pasar por un teclado y teclear comandos por ti. USBGuard bloquea todo dispositivo nuevo hasta que lo apruebes."));
-            if usbguard {
-                ui.label(RichText::new("USBGuard está instalado.").color(OK));
+            if !installed {
+                ui.label(RichText::new("No está instalado. Silence lo instala con el gestor de paquetes de tu distribución, permite lo que tienes conectado ahora (para no dejarte sin teclado ni ratón) y lo enciende.").size(12.5).color(WARN));
+            } else if running {
+                ui.label(RichText::new("USBGuard está activo: los USB nuevos quedan bloqueados hasta que los apruebes con «usbguard allow-device».").color(OK));
             } else {
-                ui.label(RichText::new("Por seguridad Silence no lo activa solo: una mala configuración puede dejarte sin teclado. Hazlo con calma:").color(WARN).size(12.5));
-                for l in ["sudo dnf install usbguard   (o apt/pacman equivalente)", "sudo sh -c 'usbguard generate-policy > /etc/usbguard/rules.conf'", "sudo systemctl enable --now usbguard"] {
-                    ui.label(RichText::new(l).monospace().size(12.0).color(ACCENT));
-                }
-                ui.label(dim("El segundo comando permite lo que tienes conectado ahora; conéctalo todo antes."));
+                ui.label(dim("USBGuard está instalado pero apagado."));
             }
-        }, |_ui, _this| {}, self);
+        }, |ui, this| {
+            if !installed {
+                if ui.add_enabled(!busy, primary_button("Instalar y activar")).clicked() {
+                    this.ask_tool(ToolRequest::Usbguard { mode: "setup".into() }, "Instalar y activar USBGuard", false);
+                }
+            } else if running {
+                if ui.add_enabled(!busy, egui::Button::new("Apagar USBGuard")).clicked() {
+                    this.ask_tool(ToolRequest::Usbguard { mode: "off".into() }, "Apagar USBGuard", false);
+                }
+            } else if ui.add_enabled(!busy, primary_button("Encender USBGuard")).clicked() {
+                this.ask_tool(ToolRequest::Usbguard { mode: "on".into() }, "Encender USBGuard", false);
+            }
+        }, self);
     }
 
     fn section_system(&mut self, ui: &mut egui::Ui) {

@@ -880,7 +880,7 @@ pub const TOOL_SYSCTL: [&str; 9] = [
 // ───────────────────────── Orquestación ─────────────────────────
 
 fn referenced(rules: &[Rule]) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<(String, String)>, BTreeSet<(String, String, String)>) {
-    let mut units: BTreeSet<String> = ["firewalld.service", "ufw.service", "nftables.service", "systemd-resolved.service", "NetworkManager.service"]
+    let mut units: BTreeSet<String> = ["firewalld.service", "ufw.service", "nftables.service", "systemd-resolved.service", "NetworkManager.service", "usbguard.service"]
         .into_iter()
         .map(String::from)
         .collect();

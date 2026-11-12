@@ -17,7 +17,7 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("Este modo solo funciona con permisos de administrador (lo lanza Silence mediante pkexec).");
         return 2;
     }
-    let runner = RealRunner { timeout: std::time::Duration::from_secs(60) };
+    let runner = RealRunner { timeout: std::time::Duration::from_secs(600) };
     let a = Applier::new(&runner);
     let jp = crate::ops::root_journal_path();
     let mut out: Vec<Outcome> = Vec::new();

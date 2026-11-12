@@ -96,6 +96,8 @@ pub enum ToolRequest {
     Flatpak { app: String, home: bool, devices: bool },
     /// Bloquea el controlador de las cámaras web USB (surte efecto al reiniciar).
     Camera {},
+    /// USBGuard: `setup` (instalar + política + encender), `on` o `off`.
+    Usbguard { mode: String },
     /// Redes guardadas: las de confianza (casa) van a la zona `home`; las demás, a la restrictiva `public`.
     TrustedNetworks { trusted: Vec<String>, others: Vec<String> },
 }
@@ -110,6 +112,7 @@ impl ToolRequest {
             ToolRequest::Firewall { .. } => KEY_FIREWALL,
             ToolRequest::Flatpak { .. } => KEY_FLATPAK,
             ToolRequest::Camera {} => KEY_CAMERA,
+            ToolRequest::Usbguard { .. } => KEY_USBGUARD,
             ToolRequest::TrustedNetworks { .. } => KEY_TRUSTED,
         }
     }
@@ -123,7 +126,8 @@ pub const KEY_FIREWALL: &str = "tool.firewall";
 pub const KEY_FLATPAK: &str = "tool.flatpak";
 pub const KEY_CAMERA: &str = "tool.camera";
 pub const KEY_TRUSTED: &str = "tool.trusted";
-pub const TOOL_KEYS: [&str; 8] = [KEY_DNS, KEY_IDENTITY, KEY_IPV6, KEY_BROWSERS, KEY_FIREWALL, KEY_FLATPAK, KEY_CAMERA, KEY_TRUSTED];
+pub const KEY_USBGUARD: &str = "tool.usbguard";
+pub const TOOL_KEYS: [&str; 9] = [KEY_DNS, KEY_IDENTITY, KEY_IPV6, KEY_BROWSERS, KEY_FIREWALL, KEY_FLATPAK, KEY_CAMERA, KEY_TRUSTED, KEY_USBGUARD];
 
 pub struct Plan {
     pub key: &'static str,
@@ -359,6 +363,23 @@ pub fn plan(req: &ToolRequest, env: &PlanEnv) -> Result<Plan, String> {
                 fixes: vec![Fix::FlatpakOverride { app: app.clone(), args }],
             })
         }
+        ToolRequest::Usbguard { mode } => {
+            let units = vec!["usbguard.service".to_string()];
+            let (title, fixes) = match mode.as_str() {
+                "setup" => (
+                    "Instalar y activar USBGuard",
+                    vec![
+                        Fix::InstallPackages { names: vec!["usbguard".into()] },
+                        Fix::UsbguardPolicy {},
+                        Fix::EnableUnits { units },
+                    ],
+                ),
+                "on" => ("Encender USBGuard", vec![Fix::EnableUnits { units }]),
+                "off" => ("Apagar USBGuard", vec![Fix::DisableUnits { units }]),
+                other => return Err(format!("Acción de USBGuard desconocida: {other}")),
+            };
+            Ok(Plan { key: KEY_USBGUARD, title: title.into(), fixes })
+        }
         ToolRequest::Camera {} => Ok(Plan {
             key: KEY_CAMERA,
             title: "Bloquear la cámara web".into(),
@@ -545,6 +566,17 @@ mod tests {
         assert_eq!((names.clone(), props[0].value.clone()), (vec!["Casa".to_string()], "home".to_string()));
         assert!(plan(&ToolRequest::TrustedNetworks { trusted: vec![], others: vec![] }, &env()).is_err());
         assert!(plan(&ToolRequest::TrustedNetworks { trusted: vec!["Casa".into()], others: vec![] }, &PlanEnv { nm_active: false, resolved_active: false }).is_err());
+    }
+
+    #[test]
+    fn usbguard_plans() {
+        let off = plan(&ToolRequest::Usbguard { mode: "off".into() }, &env()).unwrap();
+        assert!(matches!(&off.fixes[0], Fix::DisableUnits { units } if units == &["usbguard.service"]));
+        let on = plan(&ToolRequest::Usbguard { mode: "on".into() }, &env()).unwrap();
+        assert!(matches!(&on.fixes[0], Fix::EnableUnits { .. }) && on.fixes[0].needs_root());
+        let setup = plan(&ToolRequest::Usbguard { mode: "setup".into() }, &env()).unwrap();
+        assert!(matches!(setup.fixes[0], Fix::InstallPackages { .. }) && matches!(setup.fixes[1], Fix::UsbguardPolicy {}) && matches!(setup.fixes[2], Fix::EnableUnits { .. }));
+        assert!(plan(&ToolRequest::Usbguard { mode: "x".into() }, &env()).is_err());
     }
 
     #[test]

@@ -157,7 +157,7 @@ pub fn validate(rules: &[Rule]) -> Vec<String> {
                     errs.push(format!("{id}: servicio de firewall no permitido"));
                 }
             }
-            Fix::NmProfiles { .. } | Fix::NmProfilesNamed { .. } | Fix::FlatpakOverride { .. } | Fix::SetHostname { .. } | Fix::BrowserPolicies { .. } => {
+            Fix::EnableUnits { .. } | Fix::InstallPackages { .. } | Fix::UsbguardPolicy {} | Fix::NmProfiles { .. } | Fix::NmProfilesNamed { .. } | Fix::FlatpakOverride { .. } | Fix::SetHostname { .. } | Fix::BrowserPolicies { .. } => {
                 errs.push(format!("{id}: esta acción solo puede usarse desde herramientas internas"));
             }
             Fix::Manual { steps } => {
