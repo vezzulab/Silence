@@ -472,6 +472,94 @@ fn decode_b64(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+// ───────────────────────── Dispositivos USB (USBGuard) ─────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsbDevice {
+    pub num: u32,
+    /// "allow" | "block" | "reject"
+    pub state: String,
+    pub id: String,
+    pub name: String,
+    pub port: String,
+    /// "hardwired" (interno) o "hotplug" (lo enchufaste).
+    pub connect: String,
+    /// Clases de interfaz USB (los dos primeros dígitos hexadecimales de cada una).
+    pub classes: Vec<String>,
+}
+
+impl UsbDevice {
+    pub fn is_hub(&self) -> bool {
+        !self.classes.is_empty() && self.classes.iter().all(|c| c == "09")
+    }
+    pub fn is_input(&self) -> bool {
+        self.classes.iter().any(|c| c == "03")
+    }
+    pub fn external(&self) -> bool {
+        self.connect == "hotplug"
+    }
+    /// Descripción en lenguaje llano.
+    pub fn kind(&self) -> &'static str {
+        let has = |c: &str| self.classes.iter().any(|x| x == c);
+        if self.is_hub() {
+            "Controlador USB"
+        } else if has("03") {
+            "Teclado, ratón u otro dispositivo de entrada"
+        } else if has("08") {
+            "Almacenamiento (memoria o disco USB)"
+        } else if has("0e") {
+            "Cámara"
+        } else if has("01") {
+            "Audio"
+        } else if has("07") {
+            "Impresora"
+        } else if has("e0") {
+            "Bluetooth o inalámbrico"
+        } else if has("02") || has("0a") {
+            "Red o módem"
+        } else if has("0b") {
+            "Lector de tarjetas"
+        } else {
+            "Otro dispositivo"
+        }
+    }
+}
+
+/// Interpreta la salida de `usbguard list-devices`.
+pub fn parse_usb_devices(out: &str) -> Vec<UsbDevice> {
+    let re = regex::Regex::new(r#"^(\d+): (allow|block|reject) id (\S+) (?:serial "[^"]*" )?name "([^"]*)" hash "[^"]*" parent-hash "[^"]*" via-port "([^"]*)" with-interface (\{[^}]*\}|\S+) with-connect-type "([^"]*)""#).unwrap();
+    out.lines()
+        .filter_map(|l| {
+            let c = re.captures(l.trim())?;
+            let classes = c[6]
+                .trim_matches(|ch| ch == '{' || ch == '}')
+                .split_whitespace()
+                .filter_map(|i| i.split(':').next().map(|s| s.to_lowercase()))
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            Some(UsbDevice {
+                num: c[1].parse().ok()?,
+                state: c[2].to_string(),
+                id: c[3].to_string(),
+                name: if c[4].is_empty() { c[3].to_string() } else { c[4].to_string() },
+                port: c[5].to_string(),
+                connect: c[7].to_string(),
+                classes,
+            })
+        })
+        .collect()
+}
+
+// ───────────────────────── Micrófono ─────────────────────────
+
+/// Interpreta la salida de `wpctl get-volume @DEFAULT_AUDIO_SOURCE@` («Volume: 1.00 [MUTED]»).
+/// Some(true) = silenciado, Some(false) = encendido, None = no se pudo saber.
+pub fn parse_mic_muted(out: &str) -> Option<bool> {
+    let l = out.lines().find(|l| l.trim_start().starts_with("Volume:"))?;
+    Some(l.contains("[MUTED]"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,6 +755,32 @@ mod tests {
             }
         }
         s
+    }
+
+    #[test]
+    fn usb_devices_parsed_from_real_usbguard_output() {
+        let out = r#"10: allow id 1d6b:0002 serial "0000:c1:00.4" name "xHCI Host Controller" hash "H" parent-hash "P" via-port "usb1" with-interface 09:00:00 with-connect-type ""
+17: allow id 30c9:0120 serial "200901010001" name "HP 5MP Camera" hash "E" parent-hash "H" via-port "1-1" with-interface { 0e:01:00 0e:02:00 03:00:00 fe:01:01 } with-connect-type "hardwired"
+18: block id 0951:1666 name "DataTraveler" hash "X" parent-hash "Y" via-port "3-2" with-interface 08:06:50 with-connect-type "hotplug"
+basura
+"#;
+        let d = parse_usb_devices(out);
+        assert_eq!(d.len(), 3);
+        assert!(d[0].is_hub() && !d[0].external());
+        assert_eq!((d[1].num, d[1].name.as_str(), d[1].state.as_str()), (17, "HP 5MP Camera", "allow"));
+        assert!(d[1].is_input(), "la cámara trae una interfaz HID (botón)");
+        assert_eq!(d[1].kind(), "Teclado, ratón u otro dispositivo de entrada");
+        assert_eq!((d[2].state.as_str(), d[2].kind()), ("block", "Almacenamiento (memoria o disco USB)"));
+        assert!(d[2].external() && !d[2].is_input());
+        assert!(parse_usb_devices("").is_empty());
+    }
+
+    #[test]
+    fn mic_state_parsing() {
+        assert_eq!(parse_mic_muted("Volume: 1.00 [MUTED]\n"), Some(true));
+        assert_eq!(parse_mic_muted("Volume: 0.65\n"), Some(false));
+        assert_eq!(parse_mic_muted(""), None);
+        assert_eq!(parse_mic_muted("Could not find target\n"), None);
     }
 
     #[test]

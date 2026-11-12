@@ -208,6 +208,7 @@ enum SimpleAction {
     InstallTor,
     InstallSystem,
     Update(String),
+    Usb { allow: bool, num: u32 },
 }
 
 struct ConfirmSimple {
@@ -322,6 +323,10 @@ pub struct App {
     update_rx: Option<Receiver<Result<Option<crate::update::Release>, String>>>,
     update_status: Option<String>,
     update_manual: bool,
+    mic_muted: Option<bool>,
+    mic_checked: Option<Instant>,
+    usb_devices: Option<Vec<crate::extras::UsbDevice>>,
+    usb_checked: Option<Instant>,
     br_ublock: bool,
     fw_level: String,
     fw_allow: BTreeSet<String>,
@@ -383,6 +388,10 @@ impl App {
             update_rx: None,
             update_status: None,
             update_manual: false,
+            mic_muted: None,
+            mic_checked: None,
+            usb_devices: None,
+            usb_checked: None,
             br_ublock: true,
             fw_level: "standard".into(),
             fw_allow: BTreeSet::new(),
@@ -1945,27 +1954,92 @@ impl App {
             }
         }, self);
 
-        tool_header(ui, "Micrófono", false, |ui, _this| {
+        // El estado se relee cada par de segundos (también cambia desde fuera: teclas, el panel de sonido).
+        if self.mic_checked.map(|c| c.elapsed() > Duration::from_secs(2)).unwrap_or(true) {
+            self.refresh_mic();
+        }
+        ui.ctx().request_repaint_after(Duration::from_secs(2));
+        let muted = self.mic_muted;
+        tool_header(ui, "Micrófono", muted == Some(true), |ui, _this| {
             ui.label(dim("Silencia el micrófono de todo el sistema al instante (PipeWire). Es inmediato y no cambia nada de forma permanente."));
+            ui.horizontal(|ui| {
+                ui.label(dim("Estado ahora:"));
+                match muted {
+                    Some(true) => pill(ui, "Silenciado", OK),
+                    Some(false) => pill(ui, "Encendido: las apps pueden escucharte", WARN),
+                    None => pill(ui, "No se pudo leer (¿PipeWire/wpctl?)", DIM),
+                }
+            });
         }, |ui, this| {
-            if ui.add_enabled(!busy, primary_button("Silenciar micrófono")).clicked() {
+            if muted != Some(true) && ui.add_enabled(!busy, primary_button("Silenciar micrófono")).clicked() {
                 this.set_mic_mute(true);
             }
-            if ui.add_enabled(!busy, egui::Button::new("Activar micrófono")).clicked() {
+            if muted != Some(false) && ui.add_enabled(!busy, if muted == Some(true) { primary_button("Activar micrófono") } else { egui::Button::new("Activar micrófono") }).clicked() {
                 this.set_mic_mute(false);
             }
         }, self);
 
         let installed = s.packages.contains("usbguard");
         let running = s.units.get("usbguard.service").map(|u| u.is_active()).unwrap_or(false);
-        tool_header(ui, "Puertos USB (USBGuard)", installed && running, |ui, _this| {
+        if installed && running && self.usb_checked.map(|c| c.elapsed() > Duration::from_secs(3)).unwrap_or(true) {
+            self.refresh_usb();
+        }
+        if installed && running {
+            ui.ctx().request_repaint_after(Duration::from_secs(3));
+        }
+        tool_header(ui, "Puertos USB (USBGuard)", installed && running, |ui, this| {
             ui.label(dim("Un USB desconocido puede hacerse pasar por un teclado y teclear comandos por ti. USBGuard bloquea todo dispositivo nuevo hasta que lo apruebes."));
             if !installed {
                 ui.label(RichText::new("No está instalado. Silence lo instala con el gestor de paquetes de tu distribución, permite lo que tienes conectado ahora (para no dejarte sin teclado ni ratón) y lo enciende.").size(12.5).color(WARN));
-            } else if running {
-                ui.label(RichText::new("USBGuard está activo: los USB nuevos quedan bloqueados hasta que los apruebes con «usbguard allow-device».").color(OK));
-            } else {
+            } else if !running {
                 ui.label(dim("USBGuard está instalado pero apagado."));
+            } else {
+                ui.label(RichText::new("USBGuard está activo: los USB nuevos quedan bloqueados hasta que los permitas aquí.").color(OK));
+                match this.usb_devices.clone() {
+                    None => {
+                        ui.label(dim("No se pudo leer la lista de dispositivos (tu usuario no tiene acceso a USBGuard). Usa «sudo usbguard list-devices»."));
+                    }
+                    Some(all) => {
+                        let hidden = all.iter().filter(|d| d.is_hub()).count();
+                        let mut shown: Vec<_> = all.into_iter().filter(|d| !d.is_hub()).collect();
+                        // Primero los bloqueados (lo que necesita tu decisión), luego los externos.
+                        shown.sort_by_key(|d| (d.state == "allow", !d.external(), d.num));
+                        if shown.is_empty() {
+                            ui.label(dim("No hay dispositivos USB conectados aparte de los controladores internos."));
+                        }
+                        for d in &shown {
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new(&d.name).strong());
+                                        if d.state == "allow" { pill(ui, "Permitido", OK) } else { pill(ui, "Bloqueado", WARN) }
+                                        pill(ui, if d.external() { "Enchufado" } else { "Interno" }, DIM);
+                                    });
+                                    ui.label(dim(format!("{} · {} · puerto {}", d.kind(), d.id, d.port)));
+                                });
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    if d.state == "allow" {
+                                        if ui.add_enabled(!busy, egui::Button::new("Bloquear")).clicked() {
+                                            this.confirm_simple = Some(ConfirmSimple {
+                                                title: format!("Bloquear «{}»", d.name),
+                                                lines: vec![format!("usbguard block-device -p {}", d.num)],
+                                                warn: Some(if d.is_input() { "Este dispositivo puede ser tu teclado o ratón: si lo bloqueas podrías quedarte sin poder usar el equipo.".into() } else { "El dispositivo dejará de funcionar hasta que lo permitas otra vez.".into() }),
+                                                action: SimpleAction::Usb { allow: false, num: d.num },
+                                            });
+                                        }
+                                    } else if ui.add_enabled(!busy, primary_button("Permitir")).clicked() {
+                                        this.usb_action(true, d.num);
+                                    }
+                                });
+                            });
+                        }
+                        if hidden > 0 {
+                            ui.add_space(6.0);
+                            ui.label(dim(format!("{hidden} controlador(es) USB internos ocultos.")));
+                        }
+                    }
+                }
             }
         }, |ui, this| {
             if !installed {
@@ -1975,6 +2049,9 @@ impl App {
             } else if running {
                 if ui.add_enabled(!busy, egui::Button::new("Apagar USBGuard")).clicked() {
                     this.ask_tool(ToolRequest::Usbguard { mode: "off".into() }, "Apagar USBGuard", false);
+                }
+                if ui.button("Actualizar lista").clicked() {
+                    this.refresh_usb();
                 }
             } else if ui.add_enabled(!busy, primary_button("Encender USBGuard")).clicked() {
                 this.ask_tool(ToolRequest::Usbguard { mode: "on".into() }, "Encender USBGuard", false);
@@ -2084,6 +2161,7 @@ impl App {
                     }
                 });
             }
+            SimpleAction::Usb { allow, num } => self.usb_action(allow, num),
             SimpleAction::InstallSystem => {
                 self.start_op("Instalando Silence en el sistema…", false, vec![], || {
                     match crate::selfinstall::install_system() {
@@ -2127,6 +2205,32 @@ impl App {
         });
     }
 
+    fn refresh_usb(&mut self) {
+        let o = RealRunner::default().run("usbguard", &["list-devices"]);
+        self.usb_devices = o.ok.then(|| crate::extras::parse_usb_devices(&o.stdout));
+        self.usb_checked = Some(Instant::now());
+    }
+
+    /// Permitir o bloquear un dispositivo de forma permanente (queda en las reglas de USBGuard).
+    fn usb_action(&mut self, allow: bool, num: u32) {
+        let id = num.to_string();
+        let args: Vec<&str> = vec![if allow { "allow-device" } else { "block-device" }, "-p", &id];
+        let o = RealRunner::default().run("usbguard", &args);
+        let msg = if o.ok {
+            if allow { "Dispositivo permitido." } else { "Dispositivo bloqueado." }.to_string()
+        } else {
+            format!("No se pudo cambiar el dispositivo: {}. Prueba con «sudo usbguard {} -p {num}».", o.stderr.trim(), args[0])
+        };
+        self.toast = Some((msg, Instant::now()));
+        self.refresh_usb();
+    }
+
+    fn refresh_mic(&mut self) {
+        let o = RealRunner::default().run("wpctl", &["get-volume", "@DEFAULT_AUDIO_SOURCE@"]);
+        self.mic_muted = if o.ok { crate::extras::parse_mic_muted(&o.stdout) } else { None };
+        self.mic_checked = Some(Instant::now());
+    }
+
     fn set_mic_mute(&mut self, mute: bool) {
         let o = RealRunner::default().run("wpctl", &["set-mute", "@DEFAULT_AUDIO_SOURCE@", if mute { "1" } else { "0" }]);
         let msg = if !o.ok {
@@ -2137,6 +2241,7 @@ impl App {
             "Micrófono activado.".to_string()
         };
         self.toast = Some((msg, Instant::now()));
+        self.refresh_mic();
     }
 
     fn tab_analysis(&mut self, ui: &mut egui::Ui, s: &Snapshot) {
