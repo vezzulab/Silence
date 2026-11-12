@@ -9,6 +9,8 @@ use std::path::Path;
 
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 pub const REPO: &str = "vezzulab/Silence";
+/// Archivo publicado en GitHub Pages con la última versión. No tiene el límite de consultas de la API.
+pub const LATEST_URL: &str = "https://vezzulab.github.io/Silence/latest.json";
 pub const API_URL: &str = "https://api.github.com/repos/vezzulab/Silence/releases/latest";
 pub const APPIMAGE_NAME: &str = "Silence-x86_64.AppImage";
 
@@ -71,19 +73,41 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
     })
 }
 
+/// Lee `latest.json` (formato propio y sencillo; ver `packaging/publish-latest.sh`).
+pub fn parse_latest(json: &str) -> Result<Release, String> {
+    let v: Value = serde_json::from_str(json).map_err(|_| "latest.json no válido.".to_string())?;
+    let version = v["version"].as_str().ok_or("latest.json no trae la versión.")?;
+    parse_version(version).ok_or_else(|| format!("Número de versión no reconocido: {version}"))?;
+    let page_url = v["page_url"].as_str().unwrap_or("").to_string();
+    if !page_url.starts_with("https://github.com/") {
+        return Err("Enlace de la versión no válido.".into());
+    }
+    Ok(Release {
+        version: version.trim_start_matches(['v', 'V']).to_string(),
+        name: v["name"].as_str().unwrap_or(version).to_string(),
+        notes: v["notes"].as_str().unwrap_or("").trim().to_string(),
+        page_url,
+        appimage_url: v["appimage_url"].as_str().filter(|u| u.starts_with("https://github.com/")).map(String::from),
+    })
+}
+
 /// Consulta la última versión. `Ok(None)` = ya tienes la última.
+/// Primero `latest.json` (sin límite de consultas) y, si falla, la API de GitHub.
 pub fn check(r: &dyn Runner) -> Result<Option<Release>, String> {
     if !r.exists("curl") {
         return Err("Hace falta «curl» para buscar actualizaciones.".into());
     }
-    let o = r.run(
-        "curl",
-        &["-fsSL", "--max-time", "12", "-H", "Accept: application/vnd.github+json", "-A", "silence-update-check", API_URL],
-    );
-    if !o.ok {
-        return Err("No se pudo conectar con GitHub (¿sin internet?).".into());
-    }
-    let rel = parse_release(&o.stdout)?;
+    let get = |url: &str| r.run("curl", &["-fsSL", "--max-time", "12", "-H", "Accept: application/vnd.github+json", "-A", "silence-update-check", url]);
+    let primary = get(LATEST_URL);
+    let rel = if primary.ok {
+        parse_latest(&primary.stdout)
+    } else {
+        let api = get(API_URL);
+        if !api.ok {
+            return Err("No se pudo consultar GitHub. Puede que no haya internet o que GitHub haya limitado las consultas desde tu conexión; prueba de nuevo en un rato.".into());
+        }
+        parse_release(&api.stdout)
+    }?;
     Ok(is_newer(CURRENT, &rel.version).then_some(rel))
 }
 
@@ -189,19 +213,48 @@ mod tests {
         assert_eq!(plain_notes("a\nb\nc\nd", 2), vec!["a", "b", "…"]);
     }
 
+    fn curl_key(url: &str) -> String {
+        format!("curl -fsSL --max-time 12 -H Accept: application/vnd.github+json -A silence-update-check {url}")
+    }
+
+    fn latest_json(version: &str) -> String {
+        format!(r#"{{"version":"{version}","name":"Silence {version}","notes":"- Novedad","page_url":"https://github.com/vezzulab/Silence/releases/tag/v{version}","appimage_url":"https://github.com/vezzulab/Silence/releases/download/v{version}/Silence-x86_64.AppImage"}}"#)
+    }
+
     #[test]
-    fn check_reports_only_newer_versions() {
+    fn check_uses_latest_json_and_reports_only_newer() {
+        let r = MockRunner::new();
+        r.on(&curl_key(LATEST_URL), &latest_json("99.0.0"));
+        let rel = check(&r).unwrap().unwrap();
+        assert_eq!((rel.version.as_str(), rel.notes.as_str()), ("99.0.0", "- Novedad"));
+        assert!(rel.appimage_url.unwrap().ends_with(".AppImage"));
+        assert!(!r.calls().iter().any(|c| c.contains("api.github.com")), "no toca la API si latest.json responde");
+        let same = MockRunner::new();
+        same.on(&curl_key(LATEST_URL), &latest_json(CURRENT));
+        assert!(check(&same).unwrap().is_none());
+        assert!(check(&MockRunner::new()).is_err(), "sin curl");
+    }
+
+    #[test]
+    fn check_falls_back_to_api_and_explains_rate_limits() {
         let r = MockRunner::new();
         r.on("curl --version", "curl 8\n");
-        let newer = SAMPLE.replace("v0.2.0", &format!("v{}", "99.0.0"));
-        r.on(&format!("curl -fsSL --max-time 12 -H Accept: application/vnd.github+json -A silence-update-check {API_URL}"), &newer);
+        r.fail_on("curl -fsSL --max-time 12 -H Accept: application/vnd.github+json -A silence-update-check https://vezzulab.github.io");
+        r.on(&curl_key(API_URL), &SAMPLE.replace("v0.2.0", "v99.0.0"));
         assert_eq!(check(&r).unwrap().unwrap().version, "99.0.0");
-        let r2 = MockRunner::new();
-        r2.on("curl --version", "curl 8\n");
-        let same = SAMPLE.replace("v0.2.0", &format!("v{CURRENT}"));
-        r2.on(&format!("curl -fsSL --max-time 12 -H Accept: application/vnd.github+json -A silence-update-check {API_URL}"), &same);
-        assert!(check(&r2).unwrap().is_none());
-        assert!(check(&MockRunner::new()).is_err(), "sin curl");
+        let both = MockRunner::new();
+        both.on("curl --version", "curl 8\n");
+        both.fail_on("curl ");
+        let e = check(&both).unwrap_err();
+        assert!(e.contains("limitado") && e.contains("internet"), "{e}");
+    }
+
+    #[test]
+    fn latest_json_rejects_foreign_links_and_bad_versions() {
+        assert!(parse_latest(&latest_json("1.0.0").replace("https://github.com/vezzulab/Silence/releases/tag", "http://evil.example/t")).is_err());
+        assert!(parse_latest(&latest_json("x.y")).is_err());
+        let evil = latest_json("1.0.0").replace("https://github.com/vezzulab/Silence/releases/download", "https://evil.example/d");
+        assert!(parse_latest(&evil).unwrap().appimage_url.is_none());
     }
 
     #[test]

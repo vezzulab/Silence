@@ -101,3 +101,9 @@ cargo run -- rules    # catálogo de reglas
 ```
 
 Las reglas viven en `rules/*.yaml` y se validan al cargar.
+
+### Publicar una versión
+
+1. Sube `version` en `Cargo.toml` y compila el AppImage: `./packaging/build-appimage.sh`.
+2. Crea la Release en GitHub con un tag `vX.Y.Z` y adjunta `dist/Silence-x86_64.AppImage`. Las notas de la Release son lo que verá el usuario al actualizar.
+3. Genera el aviso de actualización: `./packaging/publish-latest.sh` (escribe `docs/latest.json`), y haz commit y push. Silence lee ese archivo, servido por GitHub Pages, para saber si hay una versión nueva.
