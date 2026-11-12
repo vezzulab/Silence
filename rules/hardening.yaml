@@ -1,0 +1,283 @@
+# Endurecimiento del kernel (sysctl). Se escribe un archivo en /etc/sysctl.d/ y se aplica al instante.
+
+- id: hardening.ptrace
+  category: hardening
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Un programa puede espiar la memoria de otro
+  what: >-
+    Por defecto, cualquier programa que corre con tu usuario puede enganchar y leer la memoria de tus
+    otros programas (ptrace).
+  why: >-
+    Un programa malicioso que corra con tu usuario podría leer contraseñas o claves de tu navegador,
+    gestor de contraseñas o terminal. Restringirlo limita ese robo.
+  breaks: >-
+    Los depuradores (gdb, strace -p) solo podrán engancharse a programas que ellos mismos lancen, salvo
+    con sudo.
+  detect:
+    kind: sysctl
+    key: kernel.yama.ptrace_scope
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: kernel.yama.ptrace_scope, value: "1" }
+
+- id: hardening.kptr_restrict
+  category: hardening
+  level: strict
+  severity: low
+  breakage: minor
+  title: Direcciones internas del kernel visibles
+  what: El kernel puede mostrar a los usuarios las direcciones de memoria que usa por dentro.
+  why: Esa información facilita ataques que explotan fallos del kernel.
+  breaks: Algunas herramientas de análisis de rendimiento (perf) verán menos detalle sin sudo.
+  detect:
+    kind: sysctl
+    key: kernel.kptr_restrict
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: kernel.kptr_restrict, value: "2" }
+
+- id: hardening.dmesg_restrict
+  category: hardening
+  level: basic
+  severity: low
+  breakage: none
+  title: El registro del kernel es legible por cualquier usuario
+  what: «dmesg» muestra mensajes internos del kernel, incluyendo hardware y direcciones.
+  why: Esa información ayuda a quien quiera atacar tu equipo y a identificar tu hardware exacto.
+  breaks: Para leer dmesg tendrás que usar sudo.
+  detect:
+    kind: sysctl
+    key: kernel.dmesg_restrict
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: kernel.dmesg_restrict, value: "1" }
+
+- id: hardening.unprivileged_bpf
+  category: hardening
+  level: strict
+  severity: low
+  breakage: minor
+  title: Programas sin privilegios pueden cargar código BPF en el kernel
+  what: BPF permite ejecutar pequeños programas dentro del kernel.
+  why: Ha sido fuente repetida de fallos de seguridad que permiten escalar privilegios.
+  breaks: Algunas herramientas de monitorización sin sudo dejarán de funcionar.
+  detect:
+    kind: sysctl
+    key: kernel.unprivileged_bpf_disabled
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: kernel.unprivileged_bpf_disabled, value: "1" }
+
+- id: hardening.tcp_timestamps
+  category: hardening
+  level: paranoid
+  severity: low
+  breakage: minor
+  title: Tu equipo revela cuánto tiempo lleva encendido
+  what: Las marcas de tiempo TCP incluyen un contador relacionado con el tiempo de encendido.
+  why: Permite estimar el tiempo de actividad de tu equipo y ayuda a identificarlo de forma pasiva.
+  breaks: En conexiones muy rápidas y con mucha pérdida de paquetes, el rendimiento puede bajar ligeramente.
+  detect:
+    kind: sysctl
+    key: net.ipv4.tcp_timestamps
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.tcp_timestamps, value: "0" }
+
+- id: hardening.mac_enforcing
+  category: hardening
+  level: basic
+  severity: high
+  breakage: minor
+  title: El control de acceso obligatorio (SELinux / AppArmor) está desactivado
+  what: >-
+    SELinux (Fedora, RHEL) y AppArmor (Ubuntu, Debian, openSUSE) confinan cada programa a lo que necesita:
+    aunque un navegador o un servicio sea comprometido, no puede leer el resto de tu sistema.
+  why: >-
+    Sin esta capa, un programa comprometido tiene acceso a todo lo que tu usuario puede ver: tus archivos,
+    claves y sesiones.
+  breaks: >-
+    Si lo reactivas, algún programa mal empaquetado puede mostrar avisos de acceso denegado; hay que reetiquetar
+    el disco en el siguiente arranque (puede tardar unos minutos).
+  detect:
+    kind: builtin
+    name: mac_disabled
+  fix:
+    kind: manual
+    steps:
+      - "SELinux: edita /etc/selinux/config y pon SELINUX=enforcing, luego reinicia (el primer arranque reetiqueta el disco)."
+      - "Para probar sin reiniciar: sudo setenforce 1"
+      - "AppArmor: sudo systemctl enable --now apparmor"
+  tags: [protection]
+
+- id: hardening.rp_filter
+  category: hardening
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Sin filtro contra paquetes con dirección de origen falsa
+  what: >-
+    El «filtro de ruta inversa» descarta paquetes que dicen venir de una dirección desde la que no podrían llegar.
+  why: >-
+    Sin él, un atacante en tu red puede suplantar direcciones para eludir reglas del firewall o lanzar ataques
+    de reflexión.
+  breaks: >-
+    Se aplica el modo «flexible», que es compatible con VPN y equipos con varias conexiones.
+  detect:
+    kind: sysctl
+    key: net.ipv4.conf.all.rp_filter
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.conf.all.rp_filter, value: "2" }
+      - { key: net.ipv4.conf.default.rp_filter, value: "2" }
+  tags: [protection]
+
+- id: hardening.accept_redirects
+  category: hardening
+  level: basic
+  severity: medium
+  breakage: none
+  title: Tu equipo acepta redirecciones de ruta (ICMP redirect)
+  what: Un router puede pedirle a tu equipo que use otra puerta de salida mediante mensajes ICMP.
+  why: >-
+    Cualquier equipo de la red puede enviar una redirección falsa para desviar tu tráfico a través de él
+    (ataque de intermediario).
+  breaks: Nada en redes domésticas normales.
+  detect:
+    kind: sysctl
+    key: net.ipv4.conf.all.accept_redirects
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.conf.all.accept_redirects, value: "0" }
+      - { key: net.ipv4.conf.default.accept_redirects, value: "0" }
+      - { key: net.ipv6.conf.all.accept_redirects, value: "0" }
+      - { key: net.ipv6.conf.default.accept_redirects, value: "0" }
+  tags: [protection]
+
+- id: hardening.send_redirects
+  category: hardening
+  level: basic
+  severity: low
+  breakage: none
+  title: Tu equipo envía redirecciones de ruta
+  what: Un equipo que actúa como router puede mandar redirecciones ICMP a otros.
+  why: >-
+    Un equipo que no es router no debería emitirlas; es una función que solo un atacante aprovecharía.
+  breaks: Nada, salvo que uses este equipo como router.
+  detect:
+    kind: sysctl
+    key: net.ipv4.conf.all.send_redirects
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.conf.all.send_redirects, value: "0" }
+      - { key: net.ipv4.conf.default.send_redirects, value: "0" }
+  tags: [protection]
+
+- id: hardening.source_route
+  category: hardening
+  level: basic
+  severity: medium
+  breakage: none
+  title: Se aceptan paquetes con ruta de origen impuesta (source routing)
+  what: Un paquete puede traer escrita la ruta que debe seguir, saltándose la decisión de los routers.
+  why: Es una técnica antigua para eludir cortafuegos y suplantar equipos; hoy no tiene uso legítimo normal.
+  breaks: Nada.
+  detect:
+    kind: sysctl
+    key: net.ipv4.conf.all.accept_source_route
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.conf.all.accept_source_route, value: "0" }
+      - { key: net.ipv4.conf.default.accept_source_route, value: "0" }
+  tags: [protection]
+
+- id: hardening.syncookies
+  category: hardening
+  level: basic
+  severity: medium
+  breakage: none
+  title: Sin protección contra inundación de conexiones (SYN flood)
+  what: Las «syncookies» permiten seguir atendiendo conexiones legítimas cuando alguien intenta saturar tu equipo.
+  why: Sin ellas, un atacante puede dejarte sin red abriendo miles de conexiones a medias.
+  breaks: Nada.
+  detect:
+    kind: sysctl
+    key: net.ipv4.tcp_syncookies
+    want: "1"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv4.tcp_syncookies, value: "1" }
+  tags: [protection]
+
+- id: hardening.suid_dumpable
+  category: hardening
+  level: strict
+  severity: low
+  breakage: none
+  title: Los volcados de memoria de programas privilegiados se pueden leer
+  what: >-
+    Si un programa con permisos especiales (como sudo) falla, el sistema puede guardar una copia de su
+    memoria en disco.
+  why: >-
+    Esa copia puede contener contraseñas, claves o datos de otras cuentas. Desactivarla evita dejar
+    esos restos donde otro programa podría leerlos.
+  breaks: Nada visible. Solo los desarrolladores que depuran programas privilegiados lo notarían.
+  detect:
+    kind: sysctl
+    key: fs.suid_dumpable
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: fs.suid_dumpable, value: "0" }
+  tags: [exposure]
+
+- id: hardening.ldisc_autoload
+  category: hardening
+  level: strict
+  severity: low
+  breakage: none
+  title: El kernel carga controladores de terminal bajo demanda
+  what: >-
+    Cualquier programa sin privilegios puede pedirle al kernel que cargue módulos antiguos de
+    «terminal» (line disciplines).
+  why: >-
+    Esos módulos rara vez se usan y han tenido fallos graves que permitían tomar el control del
+    equipo. Impedir la carga automática cierra esa puerta sin afectar el uso normal.
+  breaks: Nada en un equipo de escritorio. Solo afectaría a hardware muy específico de puertos serie.
+  detect:
+    kind: sysctl
+    key: dev.tty.ldisc_autoload
+    want: "0"
+  fix:
+    kind: sysctl
+    settings:
+      - { key: dev.tty.ldisc_autoload, value: "0" }
+  tags: [exposure]

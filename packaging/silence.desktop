@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Silence
+GenericName=Privacidad y protección del sistema
+Comment=Analiza tu sistema Linux y mejora su privacidad, con cambios explicados y reversibles
+Exec=/usr/local/bin/silence
+Icon=silence
+Terminal=false
+Categories=System;Security;
+Keywords=privacy;privacidad;firewall;dns;security;seguridad;
+StartupWMClass=silence

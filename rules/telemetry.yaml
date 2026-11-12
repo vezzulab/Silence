@@ -1,0 +1,196 @@
+# Telemetría y reportes automáticos que salen (o pueden salir) de tu equipo.
+
+- id: telemetry.abrt
+  category: telemetry
+  level: strict
+  severity: low
+  breakage: minor
+  title: Reporte automático de fallos (ABRT)
+  what: >-
+    ABRT detecta cuando un programa se cierra de golpe y guarda un informe con el estado del
+    programa en ese momento, que puede incluir fragmentos de su memoria.
+  why: >-
+    Esos informes pueden contener contraseñas, textos o rutas personales, y se conservan en el
+    disco. Si decides enviarlos, salen de tu equipo hacia los servidores de la distribución.
+  breaks: >-
+    Dejarás de ver avisos de «problema detectado» y no se generarán informes de fallos. El
+    sistema funciona igual.
+  detect:
+    kind: unit
+    units: [abrtd.service, abrt-journal-core.service, abrt-oops.service, abrt-xorg.service, abrt-vmcore.service, abrt-ccpp.service, abrt-pstoreoops.service]
+  fix:
+    kind: disable_units
+    units: [abrtd.service, abrt-journal-core.service, abrt-oops.service, abrt-xorg.service, abrt-vmcore.service, abrt-ccpp.service, abrt-pstoreoops.service]
+  tags: [crash-reports]
+
+- id: telemetry.ubuntu_crash
+  category: telemetry
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Reportes de fallos a Canonical (Apport / Whoopsie)
+  what: >-
+    Apport recoge información cuando un programa falla y Whoopsie puede enviarla a los
+    servidores de Canonical (Ubuntu).
+  why: >-
+    Un informe de fallo puede incluir nombres de archivos, rutas, y contenido de memoria del
+    programa que falló. Whoopsie además identifica el equipo con un ID único.
+  breaks: >-
+    Ubuntu dejará de ofrecerte «enviar informe de error» tras un fallo. Nada más cambia.
+  applies:
+    distros: [ubuntu, debian]
+  detect:
+    kind: unit
+    units: [apport.service, whoopsie.service]
+  fix:
+    kind: disable_units
+    units: [apport.service, whoopsie.service]
+  tags: [crash-reports]
+
+- id: telemetry.ubuntu_motd_news
+  category: telemetry
+  level: strict
+  severity: low
+  breakage: none
+  title: «Noticias del día» de Ubuntu al abrir la terminal
+  what: >-
+    Un temporizador consulta a diario los servidores de Canonical para mostrar anuncios en el
+    mensaje de bienvenida de la terminal.
+  why: >-
+    Cada consulta le dice a Canonical que tu equipo está encendido, junto con la versión de
+    Ubuntu y la arquitectura.
+  breaks: Dejarás de ver anuncios al abrir sesión en la terminal.
+  applies:
+    distros: [ubuntu]
+  detect:
+    kind: unit
+    units: [motd-news.timer]
+  fix:
+    kind: disable_units
+    units: [motd-news.timer]
+
+- id: telemetry.popularity_contest
+  category: telemetry
+  level: basic
+  severity: medium
+  breakage: none
+  title: Concurso de popularidad de paquetes (popcon)
+  what: >-
+    Si participas, cada semana envía a Debian/Ubuntu la lista completa de programas que tienes
+    instalados y cuáles usas.
+  why: >-
+    Tu lista de programas instalados es una huella bastante única de ti: revela tus hábitos,
+    trabajo y aficiones.
+  breaks: Nada. Solo deja de enviarse esa estadística.
+  applies:
+    distros: [debian, ubuntu]
+  detect:
+    kind: file_regex
+    globs: [/etc/popularity-contest.conf]
+    pattern: '^\s*PARTICIPATE\s*=\s*"?yes"?'
+    fire_when: present
+  fix:
+    kind: manual
+    steps:
+      - "Ejecuta: sudo dpkg-reconfigure popularity-contest   y responde «No»"
+      - "O elimínalo por completo: sudo apt remove popularity-contest"
+
+- id: telemetry.fedora_countme
+  category: telemetry
+  level: strict
+  severity: low
+  breakage: none
+  title: Conteo de equipos de Fedora (countme)
+  what: >-
+    Una vez por semana, una de las consultas al servidor de actualizaciones incluye una marca
+    para que Fedora pueda contar cuántos equipos activos hay.
+  why: >-
+    Es anónimo (no lleva un identificador único, solo una antigüedad aproximada del sistema),
+    pero igualmente es un dato que sale de tu equipo con regularidad.
+  breaks: Nada. Las actualizaciones funcionan igual.
+  applies:
+    distros: [fedora, rhel, centos]
+  detect:
+    kind: file_regex
+    globs: [/etc/yum.repos.d/*.repo]
+    pattern: '^\s*countme\s*=\s*(1|true|yes)\s*$'
+    fire_when: present
+  fix:
+    kind: manual
+    steps:
+      - "Ejecuta: sudo sed -i 's/^countme=1/countme=0/' /etc/yum.repos.d/*.repo"
+      - "(Un futuro cambio de repositorios por una actualización podría restaurarlo; Silence te lo volverá a mostrar.)"
+
+- id: telemetry.kde_feedback
+  category: telemetry
+  level: basic
+  severity: medium
+  breakage: none
+  title: Estadísticas de uso de KDE Plasma
+  what: >-
+    Plasma puede enviar a KDE información sobre cómo usas el escritorio (versión, hardware,
+    funciones que usas) si activaste los comentarios de usuario.
+  why: Son datos de uso que salen de tu equipo hacia servidores de terceros.
+  breaks: Nada.
+  applies:
+    desktops: [KDE]
+    commands: [kreadconfig6]
+  detect:
+    kind: kconfig
+    file: PlasmaUserFeedback
+    group: Global
+    key: FeedbackLevel
+    want: "0"
+    missing_is_bad: false
+  fix:
+    kind: kwrite
+    file: PlasmaUserFeedback
+    group: Global
+    key: FeedbackLevel
+    value: "0"
+
+- id: telemetry.gnome_problem_reports
+  category: telemetry
+  level: basic
+  severity: medium
+  breakage: none
+  title: Envío de reportes técnicos (GNOME)
+  what: GNOME puede enviar automáticamente informes de problemas técnicos a la distribución.
+  why: Esos informes pueden incluir detalles de tu hardware y software, y de lo que fallaba.
+  breaks: Nada.
+  applies:
+    desktops: [GNOME]
+    commands: [gsettings]
+  detect:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: report-technical-problems
+    want: "false"
+  fix:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: report-technical-problems
+    value: "false"
+
+- id: telemetry.gnome_usage_stats
+  category: telemetry
+  level: basic
+  severity: medium
+  breakage: none
+  title: Envío de estadísticas de uso (GNOME)
+  what: GNOME puede enviar estadísticas anónimas sobre el software que usas.
+  why: Son datos de uso que salen de tu equipo.
+  breaks: Nada.
+  applies:
+    desktops: [GNOME]
+    commands: [gsettings]
+  detect:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: send-software-usage-stats
+    want: "false"
+  fix:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: send-software-usage-stats
+    value: "false"

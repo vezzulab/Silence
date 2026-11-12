@@ -1,0 +1,66 @@
+# Disco y arranque: qué pasa si alguien tiene acceso físico a tu equipo.
+
+- id: storage.root_encrypted
+  category: storage
+  level: basic
+  severity: high
+  breakage: none
+  title: El disco del sistema no está cifrado
+  what: El cifrado de disco (LUKS) vuelve ilegibles tus archivos si alguien tiene el equipo sin tu contraseña.
+  why: >-
+    Si pierdes o te roban el equipo, cualquiera puede leer todos tus archivos conectando el disco a otro
+    computador. La contraseña de usuario no lo impide.
+  breaks: >-
+    No se puede activar de forma sencilla en un sistema ya instalado. Lo más seguro es reinstalar marcando
+    «cifrar disco» (o respaldar y usar cryptsetup reencrypt, con riesgo de pérdida de datos).
+  detect:
+    kind: builtin
+    name: root_unencrypted
+  fix:
+    kind: manual
+    steps:
+      - "Haz una copia de seguridad completa de tus datos."
+      - "Reinstala la distribución activando «Cifrar el disco» en el instalador y restaura tus datos."
+  tags: [physical]
+
+- id: storage.swap_unencrypted
+  category: storage
+  level: basic
+  severity: medium
+  breakage: none
+  title: Partición de intercambio (swap) sin cifrar
+  what: La swap es espacio en disco que el sistema usa cuando se queda sin memoria RAM.
+  why: >-
+    Puede acabar guardando en el disco, sin cifrar, contenido de la memoria: contraseñas, claves y textos
+    abiertos. Esos datos pueden recuperarse incluso después de apagar el equipo.
+  breaks: Nada, pero implica reconfigurar particiones (haz copia de seguridad antes).
+  detect:
+    kind: builtin
+    name: swap_unencrypted
+  fix:
+    kind: manual
+    steps:
+      - "Lo más simple: usar zram (swap en RAM) y desactivar la swap en disco."
+      - "O cifrar la partición de swap con cryptsetup (consulta la guía de tu distribución)."
+  tags: [physical]
+
+- id: storage.secure_boot
+  category: storage
+  level: strict
+  severity: low
+  breakage: minor
+  title: Secure Boot desactivado
+  what: Secure Boot comprueba que lo que arranca tu equipo está firmado y no fue modificado.
+  why: >-
+    Sin él, alguien con acceso físico puede cambiar el arranque para capturar la contraseña de tu disco cifrado.
+  breaks: >-
+    Controladores externos sin firmar (por ejemplo algunos drivers propietarios de NVIDIA) deben firmarse
+    e inscribirse (MOK) antes de que carguen.
+  detect:
+    kind: builtin
+    name: secure_boot_off
+  fix:
+    kind: manual
+    steps:
+      - "Entra a la configuración UEFI/BIOS de tu equipo y activa Secure Boot."
+  tags: [physical]

@@ -1,0 +1,269 @@
+# Red: qué sale de tu equipo y qué puertas tiene abiertas.
+
+- id: network.dns_over_tls
+  category: network
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Consultas DNS sin cifrar
+  what: >-
+    Cada vez que entras a un sitio, tu equipo pregunta a un servidor DNS «¿dónde está ese nombre?».
+    Esas preguntas viajan por la red en texto claro.
+  why: >-
+    Tu proveedor de internet y cualquiera en tu red Wi-Fi puede ver y registrar cada sitio que visitas,
+    aunque la página use HTTPS (HTTPS protege el contenido, no el nombre del sitio).
+  breaks: >-
+    Casi nada. En modo oportunista, si el servidor DNS no admite cifrado se sigue usando sin cifrar.
+    Algunas redes (portales cautivos de hoteles) pueden tardar un poco más en conectar.
+  applies:
+    units_active: [systemd-resolved.service]
+  detect:
+    kind: builtin
+    name: dns_over_tls
+  fix:
+    kind: write_files
+    files:
+      - path: /etc/systemd/resolved.conf.d/90-silence-dot.conf
+        content: |
+          # Creado por Silence. Para revertir, usa la pestaña Historial de Silence o borra este archivo.
+          [Resolve]
+          DNSOverTLS=opportunistic
+    after:
+      - { verb: restart, unit: systemd-resolved.service }
+  tags: [dns]
+
+- id: network.llmnr
+  category: network
+  level: basic
+  severity: medium
+  breakage: none
+  title: Resolución de nombres LLMNR activa
+  what: >-
+    LLMNR es un protocolo antiguo: cuando tu equipo no encuentra un nombre, pregunta a gritos a toda
+    la red local «¿alguien se llama así?».
+  why: >-
+    Revela los nombres que buscas a todos en la red, y cualquier equipo puede contestar con datos falsos
+    para desviarte hacia él (ataque de suplantación). Es un vector clásico de robo de credenciales.
+  breaks: >-
+    Prácticamente nada. Solo afectaría a encontrar equipos Windows antiguos por nombre sin dominio.
+  applies:
+    units_active: [systemd-resolved.service]
+  detect:
+    kind: builtin
+    name: dns_llmnr
+  fix:
+    kind: write_files
+    files:
+      - path: /etc/systemd/resolved.conf.d/90-silence-llmnr.conf
+        content: |
+          # Creado por Silence.
+          [Resolve]
+          LLMNR=no
+      - path: /etc/NetworkManager/conf.d/90-silence-llmnr.conf
+        content: |
+          # Creado por Silence. NetworkManager configura LLMNR por conexión; esto lo apaga por defecto.
+          [connection.90-silence-llmnr]
+          connection.llmnr=0
+    after:
+      - { verb: restart, unit: systemd-resolved.service }
+      - { verb: reload, unit: NetworkManager.service }
+  tags: [dns, lan-discovery]
+
+- id: network.mac_wifi
+  category: network
+  level: basic
+  severity: medium
+  breakage: minor
+  title: Dirección MAC fija en cada red Wi-Fi
+  what: >-
+    La dirección MAC es el «número de serie» de tu tarjeta Wi-Fi. Si no se disfraza, tu equipo se
+    presenta con el mismo número en todas las redes.
+  why: >-
+    Con la misma MAC, cualquier red (aeropuertos, centros comerciales, hoteles) puede reconocerte y
+    seguir tus visitas entre lugares y días.
+  breaks: >-
+    Una MAC distinta por red: en tu casa seguirá igual cada vez. Puede que un router con filtro por MAC
+    o un portal de Wi-Fi gratuito con límite de tiempo te trate como un equipo nuevo.
+  applies:
+    units_active: [NetworkManager.service]
+    hardware: [wifi]
+  detect:
+    kind: file_regex
+    globs:
+      - /etc/NetworkManager/NetworkManager.conf
+      - /etc/NetworkManager/conf.d/*.conf
+      - /usr/lib/NetworkManager/conf.d/*.conf
+      - /run/NetworkManager/conf.d/*.conf
+    pattern: '^\s*wifi\.cloned-mac-address\s*=\s*(random|stable|stable-ssid)\s*$'
+    fire_when: absent
+  fix:
+    kind: write_files
+    files:
+      - path: /etc/NetworkManager/conf.d/90-silence-wifi-mac.conf
+        content: |
+          # Creado por Silence. Una MAC distinta y estable por cada red Wi-Fi.
+          [connection.90-silence-wifi-mac]
+          match-device=type:wifi
+          wifi.cloned-mac-address=stable-ssid
+    after:
+      - { verb: reload, unit: NetworkManager.service }
+  tags: [tracking]
+
+- id: network.dhcp_hostname
+  category: network
+  level: basic
+  severity: medium
+  breakage: minor
+  title: Tu nombre de equipo se envía a cada red
+  what: >-
+    Al conectarte a una red, tu equipo le dice al router su nombre (por ejemplo «portatil-de-luis»)
+    para recibir una dirección.
+  why: >-
+    Cualquiera en esa red —y el administrador del Wi-Fi— ve el nombre de tu equipo, que a veces
+    contiene tu nombre real.
+  breaks: >-
+    Tu equipo aparecerá sin nombre en la lista de dispositivos del router.
+  applies:
+    units_active: [NetworkManager.service]
+    non_generic_hostname: true
+  detect:
+    kind: file_regex
+    globs:
+      - /etc/NetworkManager/NetworkManager.conf
+      - /etc/NetworkManager/conf.d/*.conf
+      - /usr/lib/NetworkManager/conf.d/*.conf
+      - /run/NetworkManager/conf.d/*.conf
+    pattern: '^\s*ipv4\.dhcp-send-hostname\s*=\s*(false|0|no)\s*$'
+    fire_when: absent
+  fix:
+    kind: write_files
+    files:
+      - path: /etc/NetworkManager/conf.d/90-silence-dhcp-hostname.conf
+        content: |
+          # Creado por Silence. No enviar el nombre del equipo al router.
+          [connection.90-silence-dhcp-hostname]
+          ipv4.dhcp-send-hostname=false
+          ipv6.dhcp-send-hostname=false
+    after:
+      - { verb: reload, unit: NetworkManager.service }
+  tags: [tracking]
+
+- id: network.ipv6_privacy
+  category: network
+  level: basic
+  severity: medium
+  breakage: none
+  title: Dirección IPv6 permanente (sin extensiones de privacidad)
+  what: >-
+    Con IPv6, tu equipo se arma una dirección a partir de su tarjeta de red y esa dirección no cambia nunca.
+  why: >-
+    Los sitios que visitas pueden reconocerte por esa dirección fija incluso si cambias de red o borras cookies.
+    Las direcciones temporales (privacy extensions) cambian cada cierto tiempo.
+  breaks: Nada visible. Solo cambia la dirección con la que sales a internet por IPv6.
+  detect:
+    kind: sysctl
+    key: net.ipv6.conf.default.use_tempaddr
+    want: "2"
+    op: at_least
+  fix:
+    kind: sysctl
+    settings:
+      - { key: net.ipv6.conf.all.use_tempaddr, value: "2" }
+      - { key: net.ipv6.conf.default.use_tempaddr, value: "2" }
+  tags: [tracking]
+
+- id: network.exposed_ports
+  category: network
+  level: basic
+  severity: medium
+  breakage: none
+  title: Programas escuchando conexiones desde tu red
+  what: >-
+    Hay programas abiertos a recibir conexiones desde otros equipos de tu red, no solo desde tu propio equipo.
+  why: >-
+    Cada puerto abierto es una puerta: otro equipo de la red puede intentar hablar con ese programa.
+    En redes compartidas conviene tener solo las puertas que de verdad usas.
+  breaks: Nada hasta que decidas cerrar alguno; en ese caso lo haces tú mismo (ver pasos).
+  detect:
+    kind: builtin
+    name: exposed_ports
+  fix:
+    kind: manual
+    steps:
+      - "Mira qué programa abre cada puerto (como administrador): sudo ss -tulnp"
+      - "Si no lo necesitas, desactiva el servicio (varios aparecen como reglas separadas en Silence)."
+      - "Si es una app que sí usas (por ejemplo KDE Connect), revisa si tiene ajuste para limitarla a tu red de confianza."
+  tags: [exposure]
+
+- id: network.no_firewall
+  category: network
+  level: basic
+  severity: high
+  breakage: none
+  title: No hay firewall activo
+  what: Un firewall decide qué conexiones de la red pueden llegar a tu equipo.
+  why: >-
+    Tienes programas escuchando en la red y no se detectó ningún firewall gestionado (firewalld, ufw o nftables).
+    Sin firewall, cualquier equipo de tu red puede llegar a esos programas.
+  breaks: >-
+    Nada en el uso normal. Un firewall solo bloquea conexiones entrantes no pedidas; si alojas servicios
+    deberás abrir sus puertos.
+  detect:
+    kind: builtin
+    name: no_firewall
+  fix:
+    kind: manual
+    steps:
+      - "Fedora / RHEL / openSUSE: sudo systemctl enable --now firewalld"
+      - "Ubuntu / Debian / Mint: sudo apt install ufw && sudo ufw enable"
+      - "Arch: instala y habilita firewalld o nftables."
+  tags: [exposure]
+
+- id: privacy.hostname_personal
+  category: network
+  level: strict
+  severity: low
+  breakage: minor
+  title: El nombre de tu equipo contiene tu nombre de usuario
+  what: El «hostname» es el nombre con que tu equipo se presenta en redes y en servicios.
+  why: >-
+    Aparece en redes locales, en el DHCP del router, en consultas mDNS y en logs. Si contiene tu nombre
+    real, te identifica en cualquier red a la que te conectes.
+  breaks: >-
+    Cambiar el nombre es inocuo, pero algunas sesiones de SSH abiertas o configuraciones que usan el
+    nombre antiguo podrían necesitar reconectar.
+  applies:
+    non_generic_hostname: true
+  detect:
+    kind: builtin
+    name: hostname_personal
+  fix:
+    kind: manual
+    steps:
+      - "Elige un nombre neutro, por ejemplo: sudo hostnamectl set-hostname equipo"
+
+- id: network.firewall_zone
+  category: network
+  level: basic
+  severity: high
+  breakage: notable
+  evidence: ssh
+  title: Tu red está en una zona de firewall permisiva
+  what: >-
+    El firewall agrupa tus redes en «zonas». Algunas zonas (home, work, internal, trusted…) asumen que la
+    red es de confianza y dejan abiertos servicios como SSH, Samba o todos los puertos altos.
+  why: >-
+    Si tu Wi-Fi está en una zona de confianza pero te conectas a una red que no es tuya (cafetería, hotel,
+    trabajo), cualquiera en esa red puede alcanzar esos servicios. NetworkManager asigna la zona por cada red
+    guardada, por eso cambiar solo la «zona por defecto» no sirve.
+  breaks: >-
+    Las apps que reciben conexiones de otros equipos (KDE Connect, LocalSend, compartir archivos, SSH entrante)
+    dejarán de ser alcanzables hasta que las permitas. En la pestaña Herramientas puedes elegir cuáles mantener.
+  detect:
+    kind: builtin
+    name: firewall_zone_open
+  fix:
+    kind: firewall
+    level: standard
+    allow: []
+  tags: [exposure, firewall]

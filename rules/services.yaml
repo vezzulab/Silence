@@ -1,0 +1,223 @@
+# Servicios que corren en segundo plano. Cada uno se cruza con evidencia de uso real.
+
+- id: services.cups_browsed
+  category: services
+  level: basic
+  severity: high
+  breakage: minor
+  evidence: printers
+  title: Descubrimiento automático de impresoras (cups-browsed)
+  what: >-
+    Escucha en la red anuncios de impresoras compartidas y las añade solo a tu equipo.
+  why: >-
+    Acepta mensajes de cualquier equipo de tu red (UDP 631). En 2024 se descubrió que esto
+    permitía ejecutar código en el equipo de la víctima. Además da a conocer tu equipo en la red.
+  breaks: >-
+    Ya no aparecerán solas las impresoras de la red. Las que ya añadiste (USB o por dirección IP)
+    siguen funcionando.
+  detect:
+    kind: unit
+    units: [cups-browsed.service]
+  fix:
+    kind: disable_units
+    units: [cups-browsed.service]
+  tags: [printing]
+
+- id: services.cups
+  category: services
+  level: strict
+  severity: low
+  breakage: notable
+  evidence: printers
+  title: Servicio de impresión (CUPS)
+  what: El servicio que gestiona las impresoras y la cola de impresión.
+  why: >-
+    Corre siempre aunque no imprimas, es superficie de ataque y guarda el historial de trabajos
+    de impresión (con los nombres de los documentos).
+  breaks: No podrás imprimir hasta volver a activarlo.
+  detect:
+    kind: unit
+    units: [cups.service, cups.socket, cups.path]
+  fix:
+    kind: disable_units
+    units: [cups.service, cups.socket, cups.path]
+  tags: [printing]
+
+- id: services.avahi
+  category: services
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Anuncio de tu equipo en la red local (Avahi / mDNS)
+  what: >-
+    Avahi anuncia tu equipo y sus servicios a todos los de tu red local y descubre los de los demás.
+  why: >-
+    En una red compartida (cafetería, hotel, trabajo) cualquiera puede ver el nombre de tu equipo y
+    qué servicios ofreces. Es una fuente típica de identificación y seguimiento en redes locales.
+  breaks: >-
+    Se pierde el descubrimiento automático de impresoras de red, Chromecast/AirPlay y equipos por
+    su nombre «.local».
+  detect:
+    kind: unit
+    units: [avahi-daemon.service, avahi-daemon.socket]
+  fix:
+    kind: disable_units
+    units: [avahi-daemon.service, avahi-daemon.socket]
+  tags: [lan-discovery]
+
+- id: services.bluetooth
+  category: services
+  level: strict
+  severity: low
+  breakage: notable
+  evidence: bluetooth
+  title: Bluetooth
+  what: El servicio que gestiona los dispositivos Bluetooth (audífonos, ratón, teclado…).
+  why: >-
+    Un Bluetooth encendido es otra superficie de ataque y emite señales que pueden usarse para
+    rastrearte físicamente.
+  breaks: Tus dispositivos Bluetooth dejarán de funcionar hasta volver a activarlo.
+  applies:
+    hardware: [bluetooth]
+  detect:
+    kind: unit
+    units: [bluetooth.service]
+  fix:
+    kind: disable_units
+    units: [bluetooth.service]
+  tags: [bluetooth]
+
+- id: services.modemmanager
+  category: services
+  level: strict
+  severity: low
+  breakage: minor
+  evidence: modem
+  title: Gestor de módems móviles (ModemManager)
+  what: Busca y gestiona módems 3G/4G/5G y puertos serie conectados.
+  why: >-
+    Sondea puertos USB y serie buscando módems. Si no usas internet móvil por módem, es superficie
+    de ataque sin ningún beneficio.
+  breaks: >-
+    Los módems móviles (SIM en el portátil, módems USB) dejarán de funcionar. El Wi-Fi y el cable
+    no se ven afectados.
+  detect:
+    kind: unit
+    units: [ModemManager.service]
+  fix:
+    kind: disable_units
+    units: [ModemManager.service]
+
+- id: services.sshd
+  category: services
+  level: basic
+  severity: high
+  breakage: notable
+  evidence: ssh
+  title: Acceso remoto por SSH abierto
+  what: >-
+    Permite que otros equipos inicien sesión en este por la red. Está escuchando en todas las
+    interfaces (puerto 22).
+  why: >-
+    Cualquiera en tu red local (o en internet, si tu router lo expone) puede intentar entrar. Si
+    no accedes remotamente a este equipo, es una puerta abierta sin motivo.
+  breaks: No podrás entrar a este equipo por SSH/SFTP desde otro dispositivo.
+  detect:
+    kind: unit
+    units: [sshd.service, sshd.socket, ssh.service, ssh.socket]
+  fix:
+    kind: disable_units
+    units: [sshd.service, sshd.socket, ssh.service, ssh.socket]
+  tags: [remote-access]
+
+- id: services.cockpit
+  category: services
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Consola web de administración (Cockpit)
+  what: Un panel de administración accesible desde el navegador (puerto 9090).
+  why: Expone una interfaz de administración completa a toda tu red.
+  breaks: No podrás administrar el equipo desde el navegador en el puerto 9090.
+  detect:
+    kind: unit
+    units: [cockpit.socket, cockpit.service]
+  fix:
+    kind: disable_units
+    units: [cockpit.socket, cockpit.service]
+  tags: [remote-access]
+
+- id: services.samba
+  category: services
+  level: basic
+  severity: high
+  breakage: notable
+  evidence: file_share
+  title: Carpetas compartidas con Windows (Samba)
+  what: Comparte carpetas de este equipo con otros de la red mediante SMB.
+  why: >-
+    Anuncia tu equipo y acepta conexiones desde la red. Samba ha tenido varias vulnerabilidades
+    graves, y las carpetas compartidas por error son una fuga común de datos.
+  breaks: Otros equipos no podrán acceder a las carpetas que compartes por red.
+  detect:
+    kind: unit
+    units: [smb.service, nmb.service, smbd.service, nmbd.service]
+  fix:
+    kind: disable_units
+    units: [smb.service, nmb.service, smbd.service, nmbd.service]
+  tags: [file-sharing]
+
+- id: services.nfs_server
+  category: services
+  level: basic
+  severity: high
+  breakage: notable
+  evidence: file_share
+  title: Servidor de archivos NFS
+  what: Comparte carpetas de este equipo con otros de la red mediante NFS.
+  why: Acepta conexiones desde la red; una configuración laxa expone archivos a cualquiera.
+  breaks: Otros equipos no podrán montar las carpetas que compartes por NFS.
+  detect:
+    kind: unit
+    units: [nfs-server.service]
+  fix:
+    kind: disable_units
+    units: [nfs-server.service]
+  tags: [file-sharing]
+
+- id: services.rpcbind
+  category: services
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Mapeador de servicios RPC (rpcbind)
+  what: Un servicio antiguo que indica en qué puertos están otros servicios (usado por NFSv3 y NIS).
+  why: Responde a consultas de la red revelando qué servicios tienes; se ha usado en ataques de amplificación.
+  breaks: Las carpetas NFS versión 3 (y NIS) dejarán de poder montarse. NFSv4 no lo necesita.
+  detect:
+    kind: unit
+    units: [rpcbind.service, rpcbind.socket]
+  fix:
+    kind: disable_units
+    units: [rpcbind.service, rpcbind.socket]
+
+- id: services.geoclue
+  category: services
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Servicio de ubicación (GeoClue)
+  what: Calcula tu ubicación a partir de Wi-Fi e IP y se la da a las aplicaciones que la piden.
+  why: >-
+    Para calcular dónde estás puede enviar los nombres de las redes Wi-Fi cercanas a un servicio
+    externo de geolocalización.
+  breaks: >-
+    Aplicaciones de mapas, clima y de ajuste automático de zona horaria o de brillo/temperatura
+    por ubicación dejarán de saber dónde estás.
+  detect:
+    kind: unit
+    units: [geoclue.service]
+  fix:
+    kind: disable_units
+    units: [geoclue.service]
+  tags: [location]

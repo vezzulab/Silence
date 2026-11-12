@@ -1,0 +1,44 @@
+# Navegadores y aplicaciones.
+
+- id: browser.firefox_telemetry
+  category: browser
+  level: basic
+  severity: medium
+  breakage: none
+  title: Firefox envía datos de uso a Mozilla
+  what: >-
+    Firefox envía a Mozilla informes técnicos y de uso, participa en «estudios» y muestra contenido patrocinado
+    en la página de inicio.
+  why: Son datos sobre cómo usas tu navegador, que sale de tu equipo de forma periódica.
+  breaks: >-
+    Nada visible. Los cambios se aplican la próxima vez que abras Firefox (ciérralo y ábrelo de nuevo).
+  detect:
+    kind: builtin
+    name: firefox_telemetry
+  fix:
+    kind: firefox_privacy_prefs
+  tags: [browser]
+
+- id: browser.flatpak_broad
+  category: browser
+  level: strict
+  severity: low
+  breakage: minor
+  title: Apps Flatpak con acceso muy amplio a tus archivos o dispositivos
+  what: >-
+    Las apps Flatpak corren aisladas, pero algunas piden permiso para ver toda tu carpeta personal, todo
+    el sistema de archivos o todos los dispositivos.
+  why: Una app con acceso a todo tu disco puede leer o enviar cualquier archivo tuyo si es comprometida.
+  breaks: >-
+    La app podría no ver archivos fuera de su espacio; el selector de archivos del sistema sigue
+    permitiéndote abrir lo que elijas.
+  detect:
+    kind: builtin
+    name: flatpak_broad
+  fix:
+    kind: manual
+    steps:
+      - "Quita el acceso a toda la carpeta personal de una app: flatpak override --user --nofilesystem=home ID_DE_LA_APP"
+      - "Quita el acceso a todo el sistema: flatpak override --user --nofilesystem=host ID_DE_LA_APP"
+      - "Para deshacerlo: flatpak override --user --reset ID_DE_LA_APP"
+  tags: [flatpak]

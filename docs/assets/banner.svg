@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070910"/><stop offset="1" stop-color="#0d1222"/></linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38e1ff"/><stop offset="1" stop-color="#8b7bff"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#38e1ff" stop-opacity="0.28"/><stop offset="1" stop-color="#38e1ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <circle cx="250" cy="180" r="220" fill="url(#glow)"/>
+  <g transform="translate(150 80)">
+    <path d="M100 8 L168 36 V92 C168 134 140 166 100 184 C60 166 32 134 32 92 V36 Z" fill="#0f1524" stroke="url(#g)" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M70 98 L92 120 L134 74" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="420" y="178" font-size="84" font-weight="700" letter-spacing="18" fill="url(#g)">SILENCE</text>
+  <text x="424" y="232" font-size="28" fill="#8a97b5">Privacidad para Linux, sin jerga y con botón de deshacer.</text>
+</svg>

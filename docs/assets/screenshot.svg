@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38e1ff"/><stop offset="1" stop-color="#8b7bff"/></linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1120" height="700" rx="18" fill="#080a10" stroke="#1f273a"/>
+  <rect width="1120" height="64" rx="18" fill="#0c0f17"/><rect y="40" width="1120" height="24" fill="#0c0f17"/>
+  <text x="34" y="40" font-size="17" font-weight="700" letter-spacing="5" fill="#38e1ff">S I L E N C E</text>
+  <text x="200" y="40" font-size="13" fill="#808ca5">Privacidad para Linux</text>
+  <rect x="960" y="16" width="130" height="34" rx="10" fill="#171d2c" stroke="#1f273a"/><text x="1025" y="38" font-size="13" text-anchor="middle" fill="#eaeef6">Volver a escanear</text>
+  <rect y="64" width="230" height="636" fill="#0c0f17"/><rect x="230" y="64" width="1" height="636" fill="#1f273a"/>
+  <rect x="18" y="86" width="194" height="42" rx="10" fill="#38e1ff" fill-opacity="0.14" stroke="#38e1ff" stroke-opacity="0.6"/>
+  <text x="40" y="113" font-size="15" fill="#eaeef6">Inicio</text>
+  <text x="40" y="162" font-size="15" fill="#9aa6bf">Protecciones</text>
+  <text x="40" y="206" font-size="15" fill="#9aa6bf">Historial</text>
+  <text x="40" y="250" font-size="15" fill="#9aa6bf">Acerca de</text>
+  <g filter="url(#sh)"><rect x="271" y="96" width="810" height="190" rx="16" fill="#111520" stroke="#1f273a"/></g>
+  <circle cx="400" cy="191" r="62" fill="none" stroke="#18202e" stroke-width="10"/>
+  <circle cx="400" cy="191" r="62" fill="none" stroke="#38e1ff" stroke-opacity="0.15" stroke-width="22" stroke-dasharray="290 390" transform="rotate(135 400 191)"/>
+  <circle cx="400" cy="191" r="62" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-dasharray="290 390" transform="rotate(135 400 191)"/>
+  <text x="400" y="204" font-size="44" font-weight="700" text-anchor="middle" fill="#eaeef6">82</text>
+  <text x="510" y="160" font-size="13" fill="#808ca5">Tu nivel de privacidad</text>
+  <text x="510" y="200" font-size="32" font-weight="700" fill="#4ade80">Buena</text>
+  <text x="510" y="232" font-size="14" fill="#808ca5">4 cosas por mejorar</text>
+  <g filter="url(#sh)"><rect x="271" y="320" width="810" height="300" rx="16" fill="#111520" stroke="#1f273a"/></g>
+  <text x="305" y="362" font-size="20" font-weight="700" fill="#eaeef6">Protégete con un clic</text>
+  <g font-size="15" fill="#eaeef6">
+    <rect x="305" y="386" width="20" height="20" rx="6" fill="#38e1ff"/><text x="341" y="402">Privacidad de navegadores</text>
+    <rect x="305" y="426" width="20" height="20" rx="6" fill="#38e1ff"/><text x="341" y="442">DNS cifrado (Quad9)</text>
+    <rect x="305" y="466" width="20" height="20" rx="6" fill="#38e1ff"/><text x="341" y="482">Identidad de red: MAC y nombre cambiantes</text>
+    <rect x="305" y="506" width="20" height="20" rx="6" fill="#38e1ff"/><text x="341" y="522">Firewall con zonas por red</text>
+  </g>
+  <rect x="305" y="552" width="240" height="44" rx="12" fill="url(#g)"/>
+  <text x="425" y="580" font-size="16" font-weight="700" text-anchor="middle" fill="#06202a">Protegerme ahora (4)</text>
+</svg>

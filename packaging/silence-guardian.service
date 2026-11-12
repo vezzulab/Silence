@@ -1,0 +1,8 @@
+[Unit]
+Description=Silence Guardián: avisa si algo que aplicaste fue deshecho
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/silence check
+# Código 3 = hay cambios deshechos (no es un fallo del servicio).
+SuccessExitStatus=3

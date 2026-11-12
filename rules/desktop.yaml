@@ -1,0 +1,47 @@
+# Ajustes de escritorio.
+
+- id: desktop.gnome_recent_files
+  category: desktop
+  level: strict
+  severity: low
+  breakage: minor
+  title: Historial de archivos recientes (GNOME)
+  what: GNOME recuerda qué archivos abriste y lo ofrece en «Recientes».
+  why: Cualquiera con acceso a tu sesión puede ver qué documentos tocaste y cuándo.
+  breaks: El menú «Recientes» quedará vacío.
+  applies:
+    desktops: [GNOME]
+    commands: [gsettings]
+  detect:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: remember-recent-files
+    want: "false"
+  fix:
+    kind: gsettings
+    schema: org.gnome.desktop.privacy
+    key: remember-recent-files
+    value: "false"
+
+- id: desktop.gnome_location
+  category: desktop
+  level: strict
+  severity: medium
+  breakage: minor
+  title: Servicios de ubicación (GNOME)
+  what: GNOME permite que las aplicaciones consulten tu ubicación.
+  why: Para estimarla se pueden enviar las redes Wi-Fi cercanas a un servicio externo.
+  breaks: Mapas, clima y ajustes automáticos por ubicación dejarán de saber dónde estás.
+  applies:
+    desktops: [GNOME]
+    commands: [gsettings]
+  detect:
+    kind: gsettings
+    schema: org.gnome.system.location
+    key: enabled
+    want: "false"
+  fix:
+    kind: gsettings
+    schema: org.gnome.system.location
+    key: enabled
+    value: "false"
