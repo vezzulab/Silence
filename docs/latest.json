@@ -1,7 +1,7 @@
 {
-  "version": "0.2.1",
-  "name": "Silence 0.2.1",
-  "notes": "## Qué corrige\n- El aviso de actualizaciones ya no falla cuando GitHub limita las consultas desde tu conexión: ahora lee un archivo publicado en GitHub Pages y usa la API solo como respaldo.\n- Si no se puede consultar, la app lo explica (sin internet o límite de consultas) en lugar de decir solo «¿sin internet?».\n\n## Cómo actualizar\nSi ya tienes Silence, abre «Acerca de» → «Buscar actualizaciones» y pulsa «Actualizar ahora». Si no, descarga el archivo, dale permiso de ejecución y ábrelo.\n\nRequiere glibc 2.35 o más reciente. Algunas distros necesitan `libfuse2`.\n",
-  "page_url": "https://github.com/vezzulab/Silence/releases/tag/v0.2.1",
-  "appimage_url": "https://github.com/vezzulab/Silence/releases/download/v0.2.1/Silence-x86_64.AppImage"
+  "version": "0.2.2",
+  "name": "Silence 0.2.2",
+  "notes": "## Novedades\n- **USBGuard con lista de dispositivos:** ves cada dispositivo USB con su tipo en lenguaje llano (cámara, almacenamiento, teclado o ratón…), si está permitido o bloqueado y si es interno o lo enchufaste. Puedes permitir o bloquear desde Silence; los bloqueos piden confirmación y avisan si puede ser tu teclado.\n- **Micrófono con estado:** la tarjeta indica si el micrófono está silenciado o encendido y se actualiza sola, aunque lo cambies con la tecla del portátil.\n\n## Cómo actualizar\nAbre «Acerca de» → «Buscar actualizaciones» y pulsa «Actualizar ahora». Si no tienes Silence, descarga el archivo, dale permiso de ejecución y ábrelo.\n\nRequiere glibc 2.35 o más reciente. Algunas distros necesitan `libfuse2`.\n",
+  "page_url": "https://github.com/vezzulab/Silence/releases/tag/v0.2.2",
+  "appimage_url": "https://github.com/vezzulab/Silence/releases/download/v0.2.2/Silence-x86_64.AppImage"
 }
