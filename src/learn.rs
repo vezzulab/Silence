@@ -21,6 +21,9 @@ pub struct Learned {
     /// Muestra las pestañas técnicas (Recomendaciones, Catálogo, Análisis).
     #[serde(default)]
     pub advanced: bool,
+    /// Si es true, no se consulta GitHub al abrir la app (por defecto sí se consulta).
+    #[serde(default)]
+    pub no_update_check: bool,
     pub rules: BTreeMap<String, RuleHistory>,
 }
 

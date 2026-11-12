@@ -206,6 +206,8 @@ enum SimpleAction {
     CleanTraces(Vec<String>),
     Panic,
     InstallTor,
+    InstallSystem,
+    Update(String),
 }
 
 struct ConfirmSimple {
@@ -316,6 +318,10 @@ pub struct App {
     ssh_notes: Option<Vec<String>>,
     trusted_sel: BTreeSet<String>,
     confirm_simple: Option<ConfirmSimple>,
+    update: Option<crate::update::Release>,
+    update_rx: Option<Receiver<Result<Option<crate::update::Release>, String>>>,
+    update_status: Option<String>,
+    update_manual: bool,
     br_ublock: bool,
     fw_level: String,
     fw_allow: BTreeSet<String>,
@@ -373,6 +379,10 @@ impl App {
             ssh_notes: None,
             trusted_sel: BTreeSet::new(),
             confirm_simple: None,
+            update: None,
+            update_rx: None,
+            update_status: None,
+            update_manual: false,
             br_ublock: true,
             fw_level: "standard".into(),
             fw_allow: BTreeSet::new(),
@@ -394,6 +404,9 @@ impl App {
         }
         app.refresh_history();
         app.rescan();
+        if !app.learned.no_update_check {
+            app.check_updates(false);
+        }
         app
     }
 
@@ -494,7 +507,41 @@ impl App {
         }
     }
 
+    fn check_updates(&mut self, manual: bool) {
+        if self.update_rx.is_some() {
+            return;
+        }
+        let (tx, rx) = channel();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::update::check(&RealRunner::default()));
+            ctx.request_repaint();
+        });
+        self.update_rx = Some(rx);
+        self.update_manual = manual;
+        if manual {
+            self.update_status = Some("Buscando actualizaciones…".into());
+        }
+    }
+
     fn poll(&mut self) {
+        if let Some(rx) = &self.update_rx {
+            if let Ok(res) = rx.try_recv() {
+                self.update_rx = None;
+                match res {
+                    Ok(Some(rel)) => {
+                        self.update_status = None;
+                        self.update = Some(rel);
+                    }
+                    Ok(None) => {
+                        self.update = None;
+                        self.update_status = if self.update_manual { Some(format!("Ya tienes la última versión ({}).", crate::update::CURRENT)) } else { None };
+                    }
+                    // Una comprobación automática que falla no molesta al usuario.
+                    Err(e) => self.update_status = if self.update_manual { Some(e) } else { None },
+                }
+            }
+        }
         if let Some(rx) = &self.scan_rx {
             if let Ok(snap) = rx.try_recv() {
                 self.scan_rx = None;
@@ -1037,8 +1084,69 @@ impl App {
         self.confirm_easy = Some(ConfirmEasy { actions, bullets, details, needs_root, guards });
     }
 
+    /// Tarjeta «hay una versión nueva» con lo que trae. Devuelve true si se dibujó.
+    fn update_card(&mut self, ui: &mut egui::Ui) -> bool {
+        let Some(rel) = self.update.clone() else { return false };
+        card(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("Hay una actualización: Silence {}", rel.version)).color(ACCENT).strong().size(16.0));
+                pill(ui, &format!("tienes {}", crate::update::CURRENT), DIM);
+            });
+            let notes = crate::update::plain_notes(&rel.notes, 12);
+            if notes.is_empty() {
+                ui.label(dim("Esta versión no trae notas."));
+            } else {
+                ui.label(dim("Qué trae:"));
+                for l in &notes {
+                    ui.label(l);
+                }
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let appimage = std::env::var_os("APPIMAGE").is_some();
+                if let (true, Some(url)) = (appimage, rel.appimage_url.clone()) {
+                    if ui.add_enabled(!self.is_busy(), primary_button("Actualizar ahora")).clicked() {
+                        self.confirm_simple = Some(ConfirmSimple {
+                            title: format!("Actualizar a Silence {}", rel.version),
+                            lines: vec![format!("Descargar {url}"), "Reemplazar el AppImage actual por el nuevo".into()],
+                            warn: Some("Después, cierra y vuelve a abrir Silence.".into()),
+                            action: SimpleAction::Update(url),
+                        });
+                    }
+                }
+                if ui.button("Ver en GitHub").clicked() {
+                    let _ = std::process::Command::new("xdg-open").arg(&rel.page_url).spawn();
+                }
+                if ui.button("Más tarde").clicked() {
+                    self.update = None;
+                }
+            });
+        });
+        true
+    }
+
     fn tab_summary(&mut self, ui: &mut egui::Ui, r: &Report, s: &Snapshot) {
         ui.heading("Inicio");
+        if self.update.is_some() {
+            ui.add_space(12.0);
+            self.update_card(ui);
+        }
+        if crate::selfinstall::needs_install() {
+            ui.add_space(12.0);
+            card(ui, |ui| {
+                ui.label(RichText::new("Falta un paso para poder aplicar cambios").color(WARN).strong());
+                ui.label(dim("Estás usando Silence como AppImage. Para cambiar la configuración del sistema necesita copiarse una vez a una ubicación protegida (así nadie puede suplantarlo para obtener permisos de administrador). Escanear y ver el estado funciona sin esto."));
+                ui.add_space(6.0);
+                if ui.add_enabled(!self.is_busy(), primary_button("Instalar en el sistema")).clicked() {
+                    self.confirm_simple = Some(ConfirmSimple {
+                        title: "Instalar en el sistema".into(),
+                        lines: crate::selfinstall::preview(),
+                        warn: Some("Se te pedirá la contraseña de administrador. Se hace una sola vez (y de nuevo si actualizas el AppImage).".into()),
+                        action: SimpleAction::InstallSystem,
+                    });
+                }
+            });
+        }
         let (word, col, sentence) = if r.score >= 80 {
             ("Muy bien protegido", OK, "Tu equipo ya cuida bien tu privacidad.")
         } else if r.score >= 50 {
@@ -1953,6 +2061,26 @@ impl App {
         match action {
             SimpleAction::CleanTraces(ids) => self.run_clean_traces(ids, false),
             SimpleAction::Panic => self.run_clean_traces(["recent", "thumbs", "shell", "clipboard", "crash"].iter().map(|s| s.to_string()).collect(), true),
+            SimpleAction::Update(url) => {
+                self.start_op("Descargando la actualización…", false, vec![], move || {
+                    let target = std::env::var_os("APPIMAGE").map(std::path::PathBuf::from);
+                    let Some(target) = target else {
+                        return vec![direct_outcome("extras.update", "Actualizar", false, "Solo se puede actualizar solo el AppImage.".into())];
+                    };
+                    match crate::update::replace_appimage(&RealRunner { timeout: Duration::from_secs(660) }, &url, &target) {
+                        Ok(()) => vec![direct_outcome("extras.update", "Actualización lista", true, "Se reemplazó el AppImage. Cierra Silence y ábrelo de nuevo para usar la versión nueva. Si ya lo habías instalado en el sistema, te pedirá instalarlo otra vez.".into())],
+                        Err(e) => vec![direct_outcome("extras.update", "Actualizar", false, e)],
+                    }
+                });
+            }
+            SimpleAction::InstallSystem => {
+                self.start_op("Instalando Silence en el sistema…", false, vec![], || {
+                    match crate::selfinstall::install_system() {
+                        Ok(()) => vec![direct_outcome("extras.install", "Instalar en el sistema", true, "Listo. Ya puedes aplicar cambios que necesiten permisos de administrador.".into())],
+                        Err(e) => vec![direct_outcome("extras.install", "Instalar en el sistema", false, e)],
+                    }
+                });
+            }
             SimpleAction::InstallTor => {
                 self.start_op("Instalando Tor Browser…", false, vec![], || {
                     let r = RealRunner { timeout: Duration::from_secs(900) };
@@ -2126,11 +2254,32 @@ impl App {
 
     fn tab_about(&mut self, ui: &mut egui::Ui, r: &Report, s: &Snapshot) {
         ui.heading("Acerca de Silence");
+        ui.add_space(8.0);
+        if !self.update_card(ui) {
+            card(ui, |ui| {
+                ui.label(title("Actualizaciones"));
+                ui.label(dim(format!("Versión instalada: {}", crate::update::CURRENT)));
+                if let Some(m) = self.update_status.clone() {
+                    ui.label(m);
+                }
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(self.update_rx.is_none(), primary_button("Buscar actualizaciones")).clicked() {
+                        self.check_updates(true);
+                    }
+                });
+            });
+        }
+        let mut auto = !self.learned.no_update_check;
+        if ui.checkbox(&mut auto, "Buscar actualizaciones al abrir (consulta GitHub)").changed() {
+            self.learned.no_update_check = !auto;
+            self.learned.save();
+        }
+        ui.add_space(8.0);
         ui.label(dim("Silence es una aplicación de privacidad para quienes usan Linux: te dice qué comparte tu equipo, lo explica sin jerga y lo arregla con tu permiso."));
         card(ui, |ui| {
             ui.label(title("Qué hace y qué no hace"));
             for t in [
-                "Funciona 100% sin conexión: no tiene telemetría ni abre ninguna conexión de red propia.",
+                "No tiene telemetría. Su única conexión es consultar en GitHub si hay una versión nueva (GitHub ve tu IP, como en cualquier descarga); no envía nada de tu sistema y puedes desactivarlo abajo.",
                 "Escanear es solo lectura. Nada cambia hasta que confirmas, viendo los comandos exactos.",
                 "Antes de recomendar apagar algo, comprueba si lo estás usando (impresoras, Bluetooth, SSH…).",
                 "Todo cambio guarda cómo deshacerse; el helper con permisos solo acepta acciones del catálogo.",

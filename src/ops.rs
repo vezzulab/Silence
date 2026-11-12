@@ -63,6 +63,9 @@ pub fn helper_path_ok(exe: &Path) -> Result<(), String> {
 
 /// Ejecuta el helper con pkexec y lee su resultado (JSON en stdout).
 pub fn run_helper(exe: &Path, args: &[String]) -> Result<Vec<Outcome>, String> {
+    if crate::selfinstall::needs_install() {
+        return Err("Silence se está ejecutando como AppImage y aún no está instalado en el sistema. Pulsa «Instalar en el sistema» en la pantalla de Inicio (se hace una sola vez).".into());
+    }
     helper_path_ok(exe)?;
     let out = Command::new("pkexec")
         .arg(exe)
@@ -82,7 +85,7 @@ pub fn run_helper(exe: &Path, args: &[String]) -> Result<Vec<Outcome>, String> {
 }
 
 pub fn exe_path() -> PathBuf {
-    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("silence"))
+    crate::selfinstall::helper_exe()
 }
 
 /// Aplica reglas del catálogo. Las acciones de usuario corren aquí; las de administrador, en un

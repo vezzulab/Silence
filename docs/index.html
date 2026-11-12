@@ -20,7 +20,7 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:6
 .brand img{width:30px;height:30px}
 nav ul{display:flex;gap:28px;list-style:none;font-size:15px;color:var(--dim)}
 nav ul a:hover{color:var(--text)}
-.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:14px;font-weight:600;font-size:16px;transition:transform .2s,box-shadow .2s}
+.btn svg{width:20px;height:20px;flex:none}.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:14px;font-weight:600;font-size:16px;transition:transform .2s,box-shadow .2s}
 .btn.p{background:linear-gradient(135deg,var(--a),var(--b));color:#06121c;box-shadow:0 10px 40px -10px var(--a)}
 .btn.p:hover{transform:translateY(-2px);box-shadow:0 16px 50px -10px var(--a)}
 .btn.s{border:1px solid var(--line);background:var(--card)}
@@ -43,7 +43,7 @@ h2{font-size:clamp(30px,4.4vw,46px);letter-spacing:-.02em;line-height:1.12;margi
 .grid{display:grid;gap:22px;margin-top:56px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:32px;transition:transform .25s,border-color .25s}
 .card:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--a) 60%,var(--line))}
-.ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;margin-bottom:20px;background:linear-gradient(135deg,color-mix(in srgb,var(--a) 22%,transparent),color-mix(in srgb,var(--b) 22%,transparent));font-size:22px}
+.ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;margin-bottom:20px;color:var(--a);background:linear-gradient(135deg,color-mix(in srgb,var(--a) 22%,transparent),color-mix(in srgb,var(--b) 22%,transparent));font-size:22px}
 .card h3{font-size:20px;margin-bottom:10px}
 .card p{color:var(--dim);font-size:16px}
 .steps{counter-reset:s;display:grid;gap:22px;margin-top:56px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
@@ -80,7 +80,7 @@ footer a:hover{color:var(--text)}
   <h1>Tu Linux habla de ti. <span class="grad">Silence lo calla.</span></h1>
   <p class="lead">Escanea tu sistema, te explica qué información comparte tu equipo y lo arregla con tu permiso. Sin jerga, y con botón de deshacer en cada cambio.</p>
   <div class="cta">
-    <a class="btn p" href="#instalar">Instalar Silence</a>
+    <a class="btn p" href="https://github.com/vezzulab/Silence/releases/latest/download/Silence-x86_64.AppImage"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>Descargar AppImage</a>
     <a class="btn s" href="https://github.com/vezzulab/Silence">Ver el código</a>
   </div>
   <div class="shot"><img src="assets/screenshot.svg" alt="Vista ilustrativa de la pantalla de inicio de Silence con el medidor de privacidad y la lista de protecciones"></div>
@@ -119,12 +119,12 @@ footer a:hover{color:var(--text)}
   <div class="eyebrow">Funciones</div>
   <h2>Seis áreas, un solo lugar</h2>
   <div class="grid">
-    <div class="card reveal"><div class="ic">🌐</div><h3>Red</h3><p>Firewall por zonas, DNS cifrado (Quad9 o Mullvad), IPv6 apagable y redes de confianza para tu casa.</p></div>
-    <div class="card reveal"><div class="ic">🎭</div><h3>Identidad de red</h3><p>MAC aleatoria y un nombre de equipo que cambia en cada conexión: de celular o de PC con Windows.</p></div>
-    <div class="card reveal"><div class="ic">🧭</div><h3>Navegadores</h3><p>Firefox y Chromium sin telemetría, DuckDuckGo por defecto, modo ligero y rápido, y auditoría de extensiones.</p></div>
-    <div class="card reveal"><div class="ic">🧹</div><h3>Archivos y rastros</h3><p>Quita ubicación y datos de cámara de tus fotos, borra lo que tu equipo recuerda y activa el modo pánico.</p></div>
-    <div class="card reveal"><div class="ic">📦</div><h3>Aplicaciones</h3><p>Recorta los permisos de tus apps Flatpak e instala Tor Browser con un clic.</p></div>
-    <div class="card reveal"><div class="ic">🔒</div><h3>Dispositivos y sistema</h3><p>Bloquea la cámara, silencia el micrófono, endurece el kernel y revisa tus llaves SSH.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.8 4 5.8 4 9s-1.4 6.2-4 9c-2.6-2.8-4-5.8-4-9s1.4-6.2 4-9z"/></svg></div><h3>Red</h3><p>Firewall por zonas, DNS cifrado (Quad9 o Mullvad), IPv6 apagable y redes de confianza para tu casa.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.6 1.7-2.4 3-2.4s2.4.8 3 2.4"/><path d="M15 10h3M15 13.5h3"/></svg></div><h3>Identidad de red</h3><p>MAC aleatoria y un nombre de equipo que cambia en cada conexión: de celular o de PC con Windows.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><circle cx="6.5" cy="6.5" r=".6"/><circle cx="9.5" cy="6.5" r=".6"/></svg></div><h3>Navegadores</h3><p>Firefox y Chromium sin telemetría, DuckDuckGo por defecto, modo ligero y rápido, y auditoría de extensiones.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></div><h3>Archivos y rastros</h3><p>Quita ubicación y datos de cámara de tus fotos, borra lo que tu equipo recuerda y activa el modo pánico.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></div><h3>Aplicaciones</h3><p>Recorta los permisos de tus apps Flatpak e instala Tor Browser con un clic.</p></div>
+    <div class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><h3>Dispositivos y sistema</h3><p>Bloquea la cámara, silencia el micrófono, endurece el kernel y revisa tus llaves SSH.</p></div>
   </div>
 </div></section>
 
@@ -143,8 +143,20 @@ footer a:hover{color:var(--text)}
 
 <section id="instalar"><div class="wrap">
   <div class="eyebrow">Instalar</div>
-  <h2>Compílalo e instálalo en un minuto</h2>
-  <p class="sub" style="margin-bottom:34px">Necesitas Rust. El instalador pone el binario en <code>/usr/local/bin</code> como propiedad de root y una política de polkit atada a esa ruta.</p>
+  <h2>Descárgalo y ábrelo</h2>
+  <div class="reveal card" style="margin:34px 0 46px;display:flex;gap:28px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    <div style="max-width:620px">
+      <h3 style="font-size:24px;margin-bottom:8px">Silence AppImage</h3>
+      <p>Un solo archivo para Linux x86_64 (64 bits), sin instalar nada antes. Funciona en distros con glibc 2.35 o más reciente (Ubuntu 22.04, Fedora, Debian 12, Arch…). Algunas necesitan <code>libfuse2</code>.</p>
+      <pre style="margin-top:18px;padding:18px 22px"><span class="c"># tras descargarlo</span>
+chmod +x Silence-x86_64.AppImage
+./Silence-x86_64.AppImage</pre>
+      <p style="margin-top:14px;font-size:15px">La primera vez que quieras <i>aplicar</i> cambios, Silence te ofrece instalarse en el sistema (pide tu contraseña y muestra qué hará). Escanear funciona sin eso.</p>
+    </div>
+    <a class="btn p" href="https://github.com/vezzulab/Silence/releases/latest/download/Silence-x86_64.AppImage"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>Descargar</a>
+  </div>
+  <h3 style="font-size:22px;margin-bottom:6px">O compílalo tú</h3>
+  <p class="sub" style="margin:10px 0 24px">Necesitas Rust. El instalador pone el binario en <code>/usr/local/bin</code> como propiedad de root y una política de polkit atada a esa ruta.</p>
 <pre><span class="c"># clonar y compilar</span>
 git clone https://github.com/vezzulab/Silence.git
 cd Silence

@@ -58,6 +58,19 @@ La pestaña *Protecciones* está organizada en seis secciones.
 
 ## Instalar
 
+### AppImage (lo más fácil)
+
+**[Descargar Silence-x86_64.AppImage](https://github.com/vezzulab/Silence/releases/latest/download/Silence-x86_64.AppImage)**
+
+```bash
+chmod +x Silence-x86_64.AppImage
+./Silence-x86_64.AppImage
+```
+
+Funciona en distros con glibc 2.35 o más reciente; algunas necesitan `libfuse2`. Escanear funciona de inmediato; la primera vez que apliques cambios, Silence se ofrece a instalarse en el sistema (una vez, con tu contraseña) para poder pedir permisos de administrador de forma segura.
+
+### Compilar desde el código
+
 ```bash
 cargo build --release
 sudo ./packaging/install.sh
@@ -65,7 +78,7 @@ systemctl --user enable --now silence-guardian.timer   # opcional: el Guardián
 silence
 ```
 
-Instala el binario en `/usr/local/bin` (propiedad de root), una política de polkit atada a esa ruta, el ícono y la entrada de menú.
+Este método instala el binario en `/usr/local/bin` (propiedad de root), una política de polkit atada a esa ruta, el ícono y la entrada de menú.
 Desinstalar: `sudo ./packaging/uninstall.sh` (antes, revierte desde *Historial* lo que quieras deshacer).
 
 Requiere Rust (edición 2024) para compilar. Desarrollado y probado en Fedora con KDE; las funciones que dependen de NetworkManager, firewalld o Flatpak se desactivan solas si no están.
@@ -73,6 +86,7 @@ Requiere Rust (edición 2024) para compilar. Desarrollado y probado en Fedora co
 ## Límites honestos
 
 - **La huella DHCP no se puede ocultar del todo.** NetworkManager no deja cambiar el orden de las opciones DHCP, así que un router que identifique el sistema por ese orden puede seguir mostrando «Linux». Silence cambia lo que sí controla: MAC, nombre, clase de proveedor y pila TCP/IP.
+- El AppImage no incluye las librerías gráficas del sistema ni el Guardián diario (se activa a mano con `systemctl --user`).
 - **KDE Connect** anuncia tu equipo en la red local; ciérralo en redes ajenas.
 - Con MAC aleatoria, las redes con filtro por MAC o portales con tiempo limitado te tratarán como un equipo nuevo.
 - Los cambios que tocan la red tienen un temporizador de seguridad que los revierte si no confirmas.

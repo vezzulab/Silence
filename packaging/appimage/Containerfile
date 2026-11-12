@@ -1,0 +1,5 @@
+# Entorno de compilación con una glibc antigua (2.35) para que el AppImage corra en muchas distros.
+FROM docker.io/library/ubuntu:22.04
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config \
+ && rm -rf /var/lib/apt/lists/*

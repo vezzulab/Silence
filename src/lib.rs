@@ -12,5 +12,7 @@ pub mod model;
 pub mod ops;
 pub mod report;
 pub mod rules;
+pub mod selfinstall;
 pub mod sys;
 pub mod tools;
+pub mod update;
