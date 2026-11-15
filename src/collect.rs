@@ -990,6 +990,7 @@ pub fn collect(r: &dyn Runner, rules: &[Rule]) -> Snapshot {
     snap.evidence.insert(EvidenceKind::Ssh, evidence_ssh(&snap.connections));
     snap.evidence.insert(EvidenceKind::FileShare, evidence_fileshare(&snap.connections));
     snap.autostart = collect_autostart();
+    snap.intrusion = crate::intrusion::scan(r, &snap.connections, r.exists("ss"));
 
     for rule in rules {
         if let Detect::FileRegex { globs, pattern, .. } = &rule.detect {
@@ -1000,6 +1001,12 @@ pub fn collect(r: &dyn Runner, rules: &[Rule]) -> Snapshot {
     // Honestidad sobre los límites del escaneo.
     if !snap.info.is_root {
         snap.notes.push("Escaneo sin privilegios de administrador: no se ven los procesos de otros usuarios (por ejemplo, qué programa abre cada puerto del sistema) ni las reglas internas del firewall.".into());
+    }
+    if snap.intrusion.procs_unreadable > 0 {
+        snap.notes.push(format!(
+            "Intrusiones: {} proceso(s) de otros usuarios no se pudieron inspeccionar. Ejecutar como administrador revisa todo el sistema.",
+            snap.intrusion.procs_unreadable
+        ));
     }
     if snap.info.init != "systemd" {
         snap.notes.push(format!("Sistema de init «{}»: el análisis de servicios todavía solo soporta systemd.", snap.info.init));

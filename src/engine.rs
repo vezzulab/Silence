@@ -18,6 +18,16 @@ pub const BUILTINS: &[&str] = &[
     "secure_boot_off",
     "firefox_telemetry",
     "flatpak_broad",
+    "intr_gsocket",
+    "intr_gs_network",
+    "intr_fake_kthread",
+    "intr_deleted_exe",
+    "intr_tmp_exec",
+    "intr_ld_preload",
+    "intr_shell_startup",
+    "intr_cron",
+    "intr_systemd_units",
+    "intr_shell_network",
 ];
 
 /// Servidores DNS públicos conocidos que admiten DNS-over-TLS.
@@ -349,7 +359,17 @@ fn builtin(name: &str, snap: &Snapshot) -> Detection {
             obs.sort();
             Detection { applicable: true, fires: !obs.is_empty(), observed: if obs.is_empty() { vec!["Ninguna app tiene permisos excesivos.".into()] } else { obs } }
         }
+        n if n.starts_with("intr_") => intrusion_detection(&n["intr_".len()..], snap),
         _ => Detection::na(),
+    }
+}
+
+/// Resultado de una comprobación de intrusión (ver `intrusion.rs`). Si no se pudo ejecutar, no aplica.
+fn intrusion_detection(key: &str, snap: &Snapshot) -> Detection {
+    let Some(&n) = snap.intrusion.checked.get(key) else { return Detection::na() };
+    match snap.intrusion.hits.get(key) {
+        Some(h) if !h.is_empty() => Detection { applicable: true, fires: true, observed: h.clone() },
+        _ => Detection { applicable: true, fires: false, observed: vec![format!("No se encontró nada sospechoso ({n} elemento(s) revisado(s)).")] },
     }
 }
 
@@ -462,8 +482,10 @@ pub fn evaluate(rules: &[Rule], snap: &Snapshot, level: Level, learned: &Learned
             }
         }
 
+        // Las alertas de intrusión no entran en la puntuación de privacidad: una alerta no es
+        // «una mejora pendiente» y no debe inflar ni diluir el número.
         let weight = rule.severity.weight();
-        if !ignored {
+        if !ignored && rule.category != Category::Intrusions {
             total_w += weight;
             if det.fires {
                 todo_w += weight;

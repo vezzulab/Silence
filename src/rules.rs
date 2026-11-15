@@ -7,7 +7,7 @@ use crate::model::*;
 use regex::Regex;
 use std::collections::BTreeSet;
 
-const FILES: [(&str, &str); 7] = [
+const FILES: [(&str, &str); 8] = [
     ("telemetry", include_str!("../rules/telemetry.yaml")),
     ("services", include_str!("../rules/services.yaml")),
     ("network", include_str!("../rules/network.yaml")),
@@ -15,6 +15,7 @@ const FILES: [(&str, &str); 7] = [
     ("desktop", include_str!("../rules/desktop.yaml")),
     ("hardening", include_str!("../rules/hardening.yaml")),
     ("browser", include_str!("../rules/browser.yaml")),
+    ("intrusions", include_str!("../rules/intrusions.yaml")),
 ];
 
 pub fn load() -> Result<Vec<Rule>, String> {

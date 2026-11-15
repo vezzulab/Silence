@@ -7,6 +7,7 @@ pub mod extras;
 pub mod firefox;
 pub mod gui;
 pub mod helper;
+pub mod intrusion;
 pub mod learn;
 pub mod model;
 pub mod ops;

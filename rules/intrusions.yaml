@@ -1,0 +1,249 @@
+# Intrusiones y persistencia. Todas son comprobaciones de SOLO LECTURA: Silence te avisa y te
+# guía, pero no borra ni cambia nada por su cuenta (un archivo sospechoso puede ser tuyo).
+#
+# Si una alerta es real, el orden importa: primero aislar, luego investigar, al final limpiar.
+
+- id: intrusions.gsocket
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Rastros de gsocket (acceso remoto oculto)
+  what: >-
+    gsocket es una herramienta que da acceso remoto a un equipo sin abrir puertos. Tiene usos
+    legítimos, pero hoy se usa mucho para dejar una puerta trasera escondida en equipos Linux.
+    Silence busca sus archivos, carpetas y procesos típicos.
+  why: >-
+    Si alguien la instaló sin que lo sepas, puede abrir una terminal en tu equipo desde cualquier
+    parte de internet, ver tus archivos y usar tus sesiones, y tú no verías nada raro.
+    Si la instalaste tú a propósito, puedes marcar esta alerta como «ignorar».
+  breaks: >-
+    Nada: Silence solo te avisa. No borra ni cambia ningún archivo.
+  detect:
+    kind: builtin
+    name: intr_gsocket
+  fix:
+    kind: manual
+    steps:
+      - "Si no instalaste gsocket tú, desconecta el equipo de internet (modo avión o desenchufa el cable)."
+      - "No borres nada todavía: anota las rutas que muestra Silence; sirven para entender qué pasó."
+      - "Cierra el proceso sospechoso y quita las líneas que lo reinician (revisa las alertas de «inicio de shell», «cron» y «servicios»)."
+      - "Cambia desde OTRO equipo tus contraseñas importantes y revisa tus llaves SSH (~/.ssh)."
+      - "Si el programa estaba en /usr/bin o en un servicio del sistema, alguien tuvo permisos de administrador: lo más seguro es respaldar tus archivos y reinstalar."
+  tags: [intrusion]
+
+- id: intrusions.gs_network
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Conexión al relay de gsocket
+  what: >-
+    Un programa de tu equipo está conectado al puerto 7350, el que usa la red pública de
+    gsocket para unir a quien controla un equipo con el equipo controlado.
+  why: >-
+    Es la señal en vivo de que ese acceso remoto está funcionando ahora mismo.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_gs_network
+  fix:
+    kind: manual
+    steps:
+      - "Anota qué programa muestra Silence (nombre y PID)."
+      - "Corta la conexión a internet del equipo mientras investigas."
+      - "Mira su carpeta con: ls -l /proc/<PID>/exe  y revisa las alertas de «rastros de gsocket»."
+  tags: [intrusion]
+
+- id: intrusions.fake_kthread
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Programa disfrazado de proceso del kernel
+  what: >-
+    Un programa normal se hace pasar por un «hilo del kernel» (con nombres como [kcached],
+    [kswapd0] o [rcu_preempt], entre corchetes) para pasar desapercibido en la lista de procesos.
+  why: >-
+    Los hilos reales del kernel no son programas de usuario y no tienen una línea de comandos.
+    Si uno tiene un ejecutable detrás, alguien lo está escondiendo a propósito.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_fake_kthread
+  fix:
+    kind: manual
+    steps:
+      - "Mira de dónde viene: ls -l /proc/<PID>/exe  (el PID lo muestra Silence)."
+      - "Si el programa está en tu carpeta personal, /tmp o /dev/shm, es muy probable que sea malicioso."
+      - "Desconecta el equipo de internet antes de investigar más."
+  tags: [intrusion]
+
+- id: intrusions.deleted_exe
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Programa que se borró a sí mismo y sigue corriendo
+  what: >-
+    Un proceso sigue funcionando, pero el archivo del que salió ya no existe (o nunca estuvo en
+    disco, solo en memoria), y estaba en una carpeta temporal.
+  why: >-
+    Es un truco clásico del malware para que no lo encuentres buscando archivos. Nota: después de
+    actualizar el sistema es normal ver programas de /usr con el archivo viejo borrado; esos
+    no se marcan.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_deleted_exe
+  fix:
+    kind: manual
+    steps:
+      - "Si tienes permisos, puedes recuperar una copia para analizarla: cp /proc/<PID>/exe ~/muestra.bin  (no la ejecutes)."
+      - "Anota el nombre y PID, y cierra el proceso solo cuando hayas guardado la evidencia."
+      - "Revisa si algo lo vuelve a lanzar: alertas de «inicio de shell», «cron» y «servicios»."
+  tags: [intrusion]
+
+- id: intrusions.tmp_exec
+  category: intrusions
+  level: basic
+  severity: medium
+  breakage: none
+  title: Programa corriendo desde una carpeta temporal
+  what: >-
+    Hay un programa en ejecución cuyo archivo está en /tmp, /var/tmp o /dev/shm.
+  why: >-
+    Los programas legítimos casi nunca viven ahí; el malware sí, porque cualquiera puede escribir
+    en esas carpetas y se vacían al reiniciar. (Las apps AppImage son una excepción y no se marcan.)
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_tmp_exec
+  fix:
+    kind: manual
+    steps:
+      - "Si reconoces el programa (algo que descargaste y estás probando), puedes ignorar esta alerta."
+      - "Si no lo reconoces, desconecta la red y revisa qué es: ls -l /proc/<PID>/exe y ls -l /proc/<PID>/cwd."
+  tags: [intrusion]
+
+- id: intrusions.ld_preload
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Librería obligada en todos los programas (ld.so.preload)
+  what: >-
+    El archivo /etc/ld.so.preload hace que una librería se cargue dentro de TODOS los programas
+    del sistema. En un equipo normal no existe o está vacío.
+  why: >-
+    Es el método favorito de los rootkits para esconder archivos, procesos y conexiones: la
+    librería intercepta lo que los demás programas pueden ver, incluido este escaneo.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_ld_preload
+  fix:
+    kind: manual
+    steps:
+      - "Si no lo configuraste tú, trátalo como una intrusión con permisos de administrador."
+      - "Respalda tus archivos importantes y la lista de lo que muestra Silence."
+      - "Un rootkit puede engañar a cualquier programa del equipo, incluido Silence: lo más seguro es reinstalar el sistema desde un medio limpio."
+  tags: [intrusion]
+
+- id: intrusions.shell_startup
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Comandos sospechosos al abrir una terminal o iniciar sesión
+  what: >-
+    Silence lee tus archivos de arranque (.bashrc, .profile, .zshrc, autostart, /etc/profile.d,
+    rc.local…) y busca líneas que descargan y ejecutan scripts, esconden código en base64, abren
+    una shell inversa, lanzan programas desde /tmp o reviven a gsocket.
+  why: >-
+    Es el lugar favorito para quedarse: cada vez que abres una terminal o inicias sesión, el
+    atacante vuelve a entrar aunque borres su programa.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_shell_startup
+  fix:
+    kind: manual
+    steps:
+      - "Abre el archivo que indica Silence en un editor (por ejemplo: nano ~/.profile) y ve a la línea marcada."
+      - "Si reconoces la línea (por ejemplo, el instalador de una herramienta tuya), puedes ignorar la alerta."
+      - "Si no la reconoces, cópiala a un archivo aparte como evidencia y bórrala del original; luego busca el programa al que apuntaba."
+  tags: [intrusion]
+
+- id: intrusions.cron
+  category: intrusions
+  level: basic
+  severity: medium
+  breakage: none
+  title: Tareas programadas (cron) sospechosas
+  what: >-
+    Silence revisa tu crontab y las carpetas de cron del sistema buscando tareas que descargan y
+    ejecutan scripts, esconden código, abren shells inversas o corren programas desde /tmp.
+  why: >-
+    Cron reinicia cada cierto tiempo lo que el atacante necesite. gsocket, por ejemplo, instala
+    una tarea que se ejecuta cada hora para revivir su acceso aunque cierres el proceso.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_cron
+  fix:
+    kind: manual
+    steps:
+      - "Mira tu crontab con: crontab -l  (y el del sistema en /etc/cron.d)."
+      - "Si la tarea no es tuya, quítala con: crontab -e  (borra la línea) y guarda una copia aparte como evidencia."
+      - "Busca el programa que lanzaba y revisa también «inicio de shell» y «servicios»."
+  tags: [intrusion]
+
+- id: intrusions.systemd_units
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Servicios de systemd sospechosos
+  what: >-
+    Silence lee tus servicios de usuario (~/.config/systemd/user) y los del sistema buscando
+    comandos que esconden procesos, descargan scripts, abren shells inversas o se hacen pasar por
+    el bus de D-Bus (como hace gsocket: «D-Bus System Connection Bus»).
+  why: >-
+    Un servicio de systemd arranca con el equipo y se reinicia solo si lo detienes, así que es
+    una forma muy cómoda de tener una puerta trasera permanente.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_systemd_units
+  fix:
+    kind: manual
+    steps:
+      - "Mira el archivo que indica Silence y el estado del servicio: systemctl status <nombre>  (o systemctl --user status <nombre>)."
+      - "Si no lo reconoces, detenlo y deshabilítalo: sudo systemctl disable --now <nombre>  (o sin sudo y con --user si es de tu usuario)."
+      - "Guarda una copia del archivo .service como evidencia antes de borrarlo."
+  tags: [intrusion]
+
+- id: intrusions.shell_network
+  category: intrusions
+  level: basic
+  severity: high
+  breakage: none
+  title: Una shell con conexión abierta a internet
+  what: >-
+    Un intérprete de comandos (bash, sh, zsh…) o una herramienta como nc o socat tiene una
+    conexión de red saliente abierta.
+  why: >-
+    Un intérprete normal no habla por la red. Si lo hace, suele ser una shell inversa: alguien
+    en otra parte del mundo está escribiendo comandos en tu equipo.
+  breaks: "Nada. Silence solo te avisa."
+  detect:
+    kind: builtin
+    name: intr_shell_network
+  fix:
+    kind: manual
+    steps:
+      - "Desconecta el equipo de internet ahora."
+      - "Anota la dirección y el PID que muestra Silence, y mira qué lo lanzó: ps -o pid,ppid,cmd -p <PID>."
+      - "Cambia tus contraseñas desde otro equipo y revisa tus llaves SSH."
+  tags: [intrusion]

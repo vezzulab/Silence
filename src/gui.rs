@@ -1179,6 +1179,21 @@ impl App {
             });
         });
 
+        let alerts: Vec<&Finding> = r.todo().filter(|f| f.rule.category == Category::Intrusions).collect();
+        if !alerts.is_empty() {
+            ui.add_space(16.0);
+            card(ui, |ui| {
+                ui.label(RichText::new(format!("Posible intrusión: {} alerta(s)", alerts.len())).color(DANGER).strong().size(16.0));
+                for f in &alerts {
+                    ui.label(format!("• {}", f.rule.title));
+                    if let Some(o) = f.observed.first() {
+                        ui.label(dim(format!("    {o}")));
+                    }
+                }
+                ui.label(dim("Si no reconoces esto, desconecta el equipo de internet antes de investigar. Abre cada alerta en la lista de pendientes para ver qué hacer. Silence no borra nada por su cuenta."));
+            });
+        }
+
         if !self.drift.is_empty() {
             ui.add_space(16.0);
             card(ui, |ui| {

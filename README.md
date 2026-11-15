@@ -22,7 +22,7 @@ Está pensado para cualquier usuario de Linux (Fedora, Ubuntu, Mint, Arch…), n
 
 | | |
 |---|---|
-| **Escanea** | servicios, puertos abiertos, DNS, firewall, cifrado de disco, SELinux/AppArmor, navegadores, apps Flatpak, telemetría de la distribución… (48 reglas) |
+| **Escanea** | servicios, puertos abiertos, DNS, firewall, cifrado de disco, SELinux/AppArmor, navegadores, apps Flatpak, telemetría de la distribución, rastros de intrusión… (58 reglas) |
 | **Explica** | para cada hallazgo: qué es, por qué afecta tu privacidad y **qué dejaría de funcionar** si lo cambias |
 | **Comprueba el uso real** | antes de recomendar apagar algo mira si lo usas (impresoras, Bluetooth emparejado, SSH, dependencias activas) y no lo preselecciona si está en uso |
 | **Aplica y revierte** | muestra los comandos exactos antes; cada cambio guarda el estado previo y se revierte con un clic (Historial) |
@@ -55,6 +55,13 @@ La pestaña *Protecciones* está organizada en seis secciones.
 **Dispositivos**: bloqueo de la cámara web, silencio del micrófono con un clic y USBGuard (lo instala, genera la política con lo que tienes conectado y lo enciende o apaga).
 
 **Sistema**: endurecimiento del kernel (sysctl) y revisión de tus llaves SSH (permisos y llaves sin contraseña).
+
+**Intrusiones y persistencia** (solo lectura: avisa, nunca borra ni cambia nada)
+- **Rastros de gsocket**, la herramienta de acceso remoto que hoy se usa para dejar puertas traseras en Linux: binarios `defunct` / `gs-dbus` y su `.dat`, carpetas `~/.config/htop` y `/tmp/.gsusr-UID`, procesos con la variable `GS_ARGS`, conexiones al puerto 7350 del relay y el servicio «D-Bus System Connection Bus».
+- **Persistencia**: líneas sospechosas en `.bashrc`, `.profile`, `.zshrc`, autostart, `rc.local`, cron y servicios de systemd (usuario y sistema): descargar y ejecutar scripts, código oculto en base64, shells inversas o programas lanzados desde `/tmp`.
+- **Procesos**: programas disfrazados de hilos del kernel (`[kcached]`, `[kswapd0]`…), ejecutables que se borraron del disco y siguen corriendo, y programas que corren desde `/tmp`, `/var/tmp` o `/dev/shm`.
+- **Sistema**: `/etc/ld.so.preload` (el método típico de los rootkits) y shells con una conexión abierta a internet.
+- Si aparece una alerta, Inicio la muestra arriba de todo con los pasos a seguir. Las alertas no cuentan en la puntuación de privacidad. Si una es tuya, puedes marcarla como ignorada.
 
 ## Instalar
 
@@ -90,6 +97,7 @@ Requiere Rust (edición 2024) para compilar. Desarrollado y probado en Fedora co
 - **KDE Connect** anuncia tu equipo en la red local; ciérralo en redes ajenas.
 - Con MAC aleatoria, las redes con filtro por MAC o portales con tiempo limitado te tratarán como un equipo nuevo.
 - Los cambios que tocan la red tienen un temporizador de seguridad que los revierte si no confirmas.
+- **Intrusiones: Silence no es un antivirus.** Detecta las técnicas de persistencia y ocultación más comunes, pero un atacante con permisos de administrador o un rootkit de kernel puede engañar a cualquier programa en espacio de usuario, incluido este. Sin permisos de administrador solo se ven tus propios procesos. Si Silence marca `ld.so.preload`, lo más seguro es respaldar y reinstalar.
 
 ## Desarrollo
 

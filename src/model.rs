@@ -78,10 +78,12 @@ pub enum Category {
     Desktop,
     Hardening,
     Browser,
+    Intrusions,
 }
 
 impl Category {
-    pub const ALL: [Category; 7] = [
+    pub const ALL: [Category; 8] = [
+        Category::Intrusions,
         Category::Telemetry,
         Category::Network,
         Category::Services,
@@ -99,6 +101,7 @@ impl Category {
             Category::Desktop => "Escritorio",
             Category::Hardening => "Endurecimiento del sistema",
             Category::Browser => "Navegadores y apps",
+            Category::Intrusions => "Intrusiones y persistencia",
         }
     }
 }
@@ -549,6 +552,19 @@ pub struct NmProfile {
     pub active: bool,
 }
 
+/// Resultado de las comprobaciones de intrusión (ver `intrusion.rs`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct IntrusionScan {
+    /// Comprobaciones que pudieron ejecutarse → cuántos elementos se revisaron.
+    pub checked: BTreeMap<String, usize>,
+    /// Hallazgos por comprobación (vacío o ausente = nada sospechoso).
+    pub hits: BTreeMap<String, Vec<String>>,
+    pub procs_scanned: usize,
+    /// Procesos que no se pudieron inspeccionar por falta de permisos.
+    pub procs_unreadable: usize,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Snapshot {
     pub taken_at: i64,
@@ -577,6 +593,8 @@ pub struct Snapshot {
     pub firewall: FirewallInfo,
     pub mac: MacInfo,
     pub nm_profiles: Vec<NmProfile>,
+    #[serde(default)]
+    pub intrusion: IntrusionScan,
     /// Avisos de qué no se pudo leer (honestidad sobre los límites del escaneo).
     pub notes: Vec<String>,
 }
